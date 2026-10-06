@@ -65,14 +65,33 @@ jobs:
           PORT: ${{ secrets.STAGING_SSH_PORT || vars.STAGING_SSH_PORT }}
           KEY: ${{ secrets.STAGING_SSH_KEY }}
           KNOWN: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER || 'root' }}
         run: |
+          # Tolerate copy-paste artefacts: surrounding whitespace/newlines, "user@host", "host:port".
+          trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | head -n1; }
+          HOST=$(trim "$HOST"); PORT=$(trim "$PORT"); SSH_USER=$(trim "$SSH_USER")
+          HOST="${HOST#ssh://}"; HOST="${HOST%/}"
+          case "$HOST" in *[[:space:]]*) second=$(printf '%s' "$HOST" | awk '{print $2}'); HOST=$(printf '%s' "$HOST" | awk '{print $1}')
+            printf '%s' "$second" | grep -Eq '^[0-9]+$' && PORT="${PORT:-$second}";; esac
+          case "$HOST" in *@*) SSH_USER="${HOST%@*}"; HOST="${HOST#*@}";; esac
+          case "$HOST" in *:*:*) ;; *:*) PORT="${PORT:-${HOST##*:}}"; HOST="${HOST%:*}";; esac
+          if ! printf '%s' "$HOST" | grep -Eq '^[A-Za-z0-9.:-]+$'; then
+            echo "::error::STAGING_SSH_HOST tidak valid. Isi hanya IP atau hostname VPS (tanpa spasi), mis. 103.10.20.30"; exit 1
+          fi
+          if [ -n "$PORT" ] && ! printf '%s' "$PORT" | grep -Eq '^[0-9]+$'; then
+            echo "::error::STAGING_SSH_PORT harus berupa angka."; exit 1
+          fi
+          if ! printf '%s\n' "$KEY" | grep -q 'PRIVATE KEY-----'; then
+            echo "::error::STAGING_SSH_KEY bukan kunci privat (harus diawali -----BEGIN OPENSSH PRIVATE KEY-----). Pastikan yang diisi file deploy_staging, bukan deploy_staging.pub."; exit 1
+          fi
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           else ssh-keyscan -p "${PORT:-22}" -T 15 "$HOST" > ~/.ssh/known_hosts; echo "::warning::STAGING_SSH_KNOWN_HOSTS belum diisi; host key dipercaya saat pertama terhubung."; fi
           printf 'Host staging\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' \
-            "$HOST" "${PORT:-22}" "${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER || 'root' }}" > ~/.ssh/config
-          ssh staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"'
+            "$HOST" "${PORT:-22}" "$SSH_USER" > ~/.ssh/config
+          ssh -o BatchMode=yes -o ConnectTimeout=20 staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"' || {
+            echo "::error::SSH ke VPS gagal. Periksa: kunci publik deploy_staging.pub sudah ada di ~/.ssh/authorized_keys user tersebut, port SSH terbuka, dan IP benar."; exit 1; }
 
       - name: Upload configuration & deploy
         if: steps.cfg.outputs.ready == 'true'
