@@ -18,7 +18,22 @@ Staging adalah salinan sistem yang terhubung ke Gmail, WhatsApp, Telegram, dan A
 
 > Jangan memakai inbox Gmail produksi untuk staging: kedua sistem akan berebut membaca email klien yang sama.
 
-## Langkah
+## Cara cepat: satu perintah
+Di VPS baru (sebagai root), setelah DNS subdomain mengarah ke IP server:
+```bash
+curl -fsSL https://raw.githubusercontent.com/tomydelvos/delvos/claude/law-office-ai-agent-c8ckgb/deploy/install-staging.sh -o install-staging.sh
+sudo bash install-staging.sh
+```
+Installer akan:
+- memasang Docker dan firewall;
+- menanyakan domain, sandi penguji, dan kredensial Gmail/WhatsApp/Telegram/Anthropic (boleh dikosongkan; kanal yang kosong berjalan simulasi);
+- membuat sandi admin dan verify token acak;
+- menjalankan stack, smoke test, dan cadangan harian;
+- menampilkan URL serta login admin di akhir.
+
+Aman dijalankan ulang untuk memperbarui ke versi terbaru: `staging.env` yang sudah ada tidak ditimpa.
+
+## Langkah manual
 
 ### 1. Siapkan server
 ```bash

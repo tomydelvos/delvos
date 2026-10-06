@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Installer staging satu perintah untuk VPS Ubuntu/Debian baru (jalankan sebagai root):
+#   curl -fsSL https://raw.githubusercontent.com/tomydelvos/delvos/claude/law-office-ai-agent-c8ckgb/deploy/install-staging.sh | bash
+# atau setelah clone:  sudo bash deploy/install-staging.sh
+#
+# Yang dilakukan: pasang Docker & firewall, clone repo ke /opt/kantor, menanyakan domain + kredensial,
+# membuat rahasia acak & hash sandi penguji, menjalankan stack, lalu smoke test.
+# Aman dijalankan ulang: staging.env yang sudah ada tidak ditimpa.
+set -euo pipefail
+
+REPO="${REPO:-https://github.com/tomydelvos/delvos.git}"
+BRANCH="${BRANCH:-claude/law-office-ai-agent-c8ckgb}"
+DIR="${DIR:-/opt/kantor}"
+say() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
+ask() { local v; read -r -p "$1${2:+ [$2]}: " v </dev/tty; echo "${v:-${2:-}}"; }
+# Single-quote values so docker compose never interpolates "$" or treats "#" as a comment.
+q() { case "$1" in *\'*) echo "Nilai tidak boleh mengandung tanda kutip tunggal (')." >&2; exit 1;; esac; printf "'%s'" "$1"; }
+ask_secret() { local v; read -r -s -p "$1: " v </dev/tty; echo >&2; echo "$v"; }
+
+[ "$(id -u)" = 0 ] || { echo "Jalankan sebagai root (sudo)."; exit 1; }
+
+say "1/6 Memasang Docker, git, dan firewall"
+if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | sh; fi
+apt-get update -qq && apt-get install -y -qq git curl ufw openssl >/dev/null
+ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
+
+say "2/6 Mengambil kode"
+if [ -d "$DIR/.git" ]; then git -C "$DIR" fetch -q origin "$BRANCH" && git -C "$DIR" checkout -q "$BRANCH" && git -C "$DIR" pull -q --ff-only origin "$BRANCH"
+else git clone -q --branch "$BRANCH" "$REPO" "$DIR"; fi
+cd "$DIR/deploy"
+
+if [ ! -f staging.env ]; then
+  say "3/6 Konfigurasi (kosongkan bila belum punya — kanal itu akan berjalan simulasi)"
+  DOMAIN=$(ask "Domain staging (sudah diarahkan ke IP server ini)" "staging.kantoranda.id")
+  ACME=$(ask "Email untuk sertifikat HTTPS")
+  TESTER=$(ask "Username penguji (pelindung situs)" "penguji")
+  TESTER_PW=$(ask_secret "Sandi penguji (pelindung situs)")
+  ALLOW=$(ask "Penerima yang diizinkan (email/@domain/nomor WA, pisah koma)")
+  GMAIL=$(ask "Gmail staging (kosongkan = simulasi)")
+  GMAIL_PW=""; [ -n "$GMAIL" ] && GMAIL_PW=$(ask_secret "App Password Gmail")
+  WA_TOKEN=$(ask_secret "WhatsApp Cloud token (kosongkan = simulasi)")
+  WA_PID=""; WA_SECRET=""; [ -n "$WA_TOKEN" ] && { WA_PID=$(ask "WhatsApp Phone number ID"); WA_SECRET=$(ask_secret "Meta App Secret"); }
+  TG_TOKEN=$(ask_secret "Telegram bot token (kosongkan = simulasi)")
+  TG_CHAT=""; [ -n "$TG_TOKEN" ] && TG_CHAT=$(ask "Telegram chat id grup (-100...)")
+  AI_KEY=$(ask_secret "Anthropic API key (kosongkan = AI nonaktif)")
+
+  HASH=$(docker run --rm caddy:2 caddy hash-password --plaintext "$TESTER_PW")
+  ADMIN_PW=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)
+  VERIFY=$(openssl rand -hex 16)
+
+  umask 077
+  cat > staging.env <<EOF
+STAGING_DOMAIN=$DOMAIN
+ACME_EMAIL=$(q "$ACME")
+STAGING_BASIC_AUTH_USER=$TESTER
+STAGING_BASIC_AUTH_HASH='$HASH'
+PUBLIC_URL=https://$DOMAIN
+TZ_OFFICE=Asia/Jakarta
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=$ADMIN_PW
+SESSION_SECRET=$(q "$(openssl rand -base64 32)")
+STAGING_ALLOWED_RECIPIENTS=$(q "$ALLOW")
+EMAIL_PROVIDER=gmail
+GMAIL_USER=$(q "$GMAIL")
+GMAIL_APP_PASSWORD=$(q "$GMAIL_PW")
+MAIL_FROM="Kantor Hukum (STAGING) <$GMAIL>"
+OFFICE_DOMAIN=${GMAIL#*@}
+WA_PROVIDER=$([ -n "$WA_TOKEN" ] && echo meta || echo log)
+WA_META_TOKEN=$(q "$WA_TOKEN")
+WA_META_PHONE_NUMBER_ID=$(q "$WA_PID")
+WA_META_MODE=auto
+WA_META_TEMPLATE_NAME=notifikasi_kantor
+WA_META_TEMPLATE_LANG=id
+WA_META_VERIFY_TOKEN=$VERIFY
+WA_META_APP_SECRET=$(q "$WA_SECRET")
+WA_NOTIFY_CLIENT=true
+TELEGRAM_BOT_TOKEN=$(q "$TG_TOKEN")
+TELEGRAM_CHAT_IDS=$(q "$TG_CHAT")
+AI_ENABLED=true
+ANTHROPIC_API_KEY=$(q "$AI_KEY")
+AI_MODEL=claude-opus-5-5
+EOF
+  umask 022
+else
+  say "3/6 staging.env sudah ada — dipakai apa adanya"
+  ADMIN_PW="(tidak berubah)"; TESTER_PW=""
+  DOMAIN=$(grep '^STAGING_DOMAIN=' staging.env | cut -d= -f2); TESTER=$(grep '^STAGING_BASIC_AUTH_USER=' staging.env | cut -d= -f2)
+  VERIFY=$(grep '^WA_META_VERIFY_TOKEN=' staging.env | cut -d= -f2)
+fi
+
+say "4/6 Membangun & menjalankan (beberapa menit pada kali pertama)"
+docker compose -f docker-compose.staging.yml --env-file staging.env up -d --build
+
+say "5/6 Menunggu aplikasi & sertifikat HTTPS"
+for i in $(seq 1 30); do curl -fsS "https://$DOMAIN/healthz" >/dev/null 2>&1 && break; sleep 5; done
+
+say "6/6 Smoke test"
+if [ -n "$TESTER_PW" ]; then ./smoke-test.sh "https://$DOMAIN" "$TESTER" "$TESTER_PW" "$VERIFY" || true
+else echo "Jalankan: ./smoke-test.sh https://$DOMAIN $TESTER '<sandi-penguji>' $VERIFY"; fi
+
+( crontab -l 2>/dev/null | grep -v 'scripts/backup.js'; echo "30 1 * * * cd $DIR/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env exec -T app node scripts/backup.js >/dev/null 2>&1" ) | crontab -
+
+cat <<EOF
+
+────────────────────────────────────────────────────────
+ Staging berjalan:  https://$DOMAIN
+ Panel admin     :  https://$DOMAIN/admin/
+ Login situs     :  $TESTER / (sandi penguji Anda)
+ Login admin     :  admin / $ADMIN_PW   ← segera ganti di "Akun Saya"
+ Webhook WhatsApp:  https://$DOMAIN/webhooks/whatsapp
+ Verify token    :  $VERIFY
+ Cadangan harian :  01.30 (cron)
+ Konfigurasi     :  $DIR/deploy/staging.env
+────────────────────────────────────────────────────────
+Langkah berikut: ikuti daftar uji di deploy/DEPLOY-STAGING.md (bagian 6).
+EOF
