@@ -49,7 +49,7 @@ Butuh **Node.js 22.13+** (memakai SQLite bawaan Node, tanpa database terpisah).
 ```bash
 npm install
 cp .env.example .env          # isi seperlunya; kosong = mode simulasi
-npm run set-password -- "kata-sandi-admin-yang-panjang"
+npm run set-password -- admin "kata-sandi-admin-yang-panjang"
 npm start
 ```
 
@@ -60,22 +60,64 @@ npm start
 Tanpa kredensial apa pun, semua kanal berjalan **simulasi** (pesan dicetak di terminal) — buka **Panel Admin → Uji Coba → Simulasi email masuk** untuk mencoba seluruh alur.
 
 ```bash
-npm test     # 10 skenario: alur email, registrasi, validasi, keamanan, konflik, status, template, admin
+npm test     # 17 skenario: alur email, registrasi, validasi, keamanan, konflik, status, template, akun & peran, WhatsApp, AI
 ```
 
 ## Menghubungkan kanal
 
-| Kanal | Isi di `.env` | Catatan |
-|---|---|---|
-| Email keluar | `SMTP_*`, `MAIL_FROM` | Gmail/Workspace: pakai **App Password**. |
-| Email masuk | `IMAP_*` | Gunakan kotak masuk khusus (mis. `intake@…`). Email yang diproses ditandai dibaca. |
-| WhatsApp | `WA_PROVIDER=fonnte` + `FONNTE_TOKEN` | Paling cepat untuk Indonesia (nomor WA biasa ditautkan). |
-| | `WA_PROVIDER=meta` + `WA_META_*` | WhatsApp Cloud API resmi. Pesan ke nomor yang belum chat 24 jam terakhir memerlukan *template* yang disetujui Meta. |
-| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS` | Buat bot di @BotFather, masukkan ke grup tim, ambil chat id grup. |
-| Tim | `TEAM_EMAILS`, `TEAM_WHATSAPP` | Dipisah koma. |
-| AI (opsional) | `AI_ENABLED=true`, `ANTHROPIC_API_KEY` | Claude men-triase email & membuat ringkasan + daftar "perlu ditanyakan" untuk tim. Bila mati/gagal, sistem tetap jalan dengan aturan dasar. |
+Semua diisi di file `.env` (lihat `.env.example`). Setelah diisi, jalankan ulang server lalu uji tiap kanal dari **Panel Admin → Uji Coba → Tes kanal notifikasi**.
 
-Uji tiap kanal dari **Panel Admin → Uji Coba → Tes kanal notifikasi**.
+### 1. Gmail / Google Workspace (email masuk & keluar)
+1. Gunakan kotak masuk khusus, misalnya `intake@kantoranda.id`.
+2. Di akun Google tersebut: aktifkan **Verifikasi 2 Langkah**, lalu buat **App Password** di <https://myaccount.google.com/apppasswords>.
+3. Pastikan **IMAP aktif**: Gmail → Setelan → *Penerusan dan POP/IMAP* → Aktifkan IMAP.
+4. Isi `.env`:
+   ```
+   EMAIL_PROVIDER=gmail
+   GMAIL_USER=intake@kantoranda.id
+   GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+   MAIL_FROM="Nama Kantor <intake@kantoranda.id>"
+   OFFICE_DOMAIN=kantoranda.id
+   ```
+   Agen Operasional memeriksa inbox tiap 60 detik. Email yang sudah diproses ditandai *dibaca* (tetap ada di Gmail).
+   Batas kirim Gmail ±500 email/hari (akun pribadi) atau ±2.000/hari (Workspace).
+
+### 2. WhatsApp Cloud API (resmi Meta)
+1. Di <https://developers.facebook.com>: buat App tipe **Business**, tambahkan produk **WhatsApp**, lalu daftarkan dan verifikasi nomor kantor.
+2. Buat **System User** di Meta Business Manager dan beri izin `whatsapp_business_messaging`. Buat **token permanen** → `WA_META_TOKEN`.
+3. Salin **Phone number ID** dari WhatsApp → API Setup → `WA_META_PHONE_NUMBER_ID`.
+4. **Buat template pesan** (WhatsApp Manager → Message templates). Karena semua pesan kita dikirim lebih dulu oleh kantor, Meta mewajibkan template:
+   - Nama: `notifikasi_kantor` · Kategori: **Utility** · Bahasa: **Indonesian (id)**
+   - Isi (body):
+     ```
+     Pemberitahuan dari {{1}}:
+
+     {{2}}
+
+     Pesan ini dikirim otomatis oleh sistem kantor kami.
+     ```
+   - Contoh nilai: `{{1}}` = *Kantor Hukum Delvos & Rekan*, `{{2}}` = *Registrasi REG-2026-00001 telah kami terima. Tim kami akan menghubungi Anda dalam 24 jam kerja.*
+5. **Webhook**: App → WhatsApp → Configuration. Isi Callback URL `https://domain-anda/webhooks/whatsapp`, Verify token = nilai `WA_META_VERIFY_TOKEN` (bebas Anda tentukan), lalu langganan field **messages**. Isi `WA_META_APP_SECRET` dari App Settings → Basic → App Secret.
+6. Isi `.env`: `WA_PROVIDER=meta` beserta nilai-nilai di atas.
+
+Cara kerjanya (`WA_META_MODE=auto`):
+- Ke nomor yang **belum mengirim pesan ke nomor kantor dalam 24 jam terakhir**, pesan dikirim lewat template `notifikasi_kantor` (isi diringkas menjadi satu paragraf).
+- Ke nomor yang **baru saja mengirim pesan**, dikirim sebagai teks biasa lengkap dengan format. Tip untuk staf: kirim "halo" ke nomor kantor setiap pagi agar notifikasi seharian tampil lengkap.
+- Lewat webhook: pesan yang gagal terkirim ditandai *gagal* di Log Notifikasi (beserta kode Meta). Pesan WhatsApp dari klien diteruskan ke grup Telegram tim dan dicatat di riwayat registrasinya. Balasan ke klien tetap dilakukan manual oleh staf.
+
+### 3. Telegram (grup tim)
+Buat bot di @BotFather → `TELEGRAM_BOT_TOKEN`. Masukkan bot ke grup tim, kirim satu pesan di grup, lalu buka `https://api.telegram.org/bot<TOKEN>/getUpdates` untuk melihat `chat.id` grup (diawali `-100…`) → `TELEGRAM_CHAT_IDS`.
+
+### 4. AI Claude
+Isi `AI_ENABLED=true` dan `ANTHROPIC_API_KEY` (dari <https://console.anthropic.com>). Untuk setiap email masuk, AI menentukan kategori, urgensi, dan apakah email itu permintaan jasa hukum. Untuk setiap registrasi, AI membuat ringkasan, isu utama, dan daftar **"perlu ditanyakan ke klien"** yang bisa dipakai dengan satu klik sebagai surat *Perlu informasi tambahan*. Bila AI tidak tersedia, sistem tetap berjalan tanpa ringkasan. Data klien dikirim ke Anthropic API; teks persetujuan PDP di formulir sudah menyebutkan hal ini.
+
+### 5. Akun staf
+Akun admin pertama dibuat dari `ADMIN_USERNAME` (`npm run set-password -- admin "sandi-panjang"`). Akun lain dibuat di **Panel Admin → Pengguna**:
+- **Admin**: semua fitur, termasuk pengguna, formulir, chatbot, template, profil kantor, log audit, dan uji coba.
+- **Staf**: email masuk, registrasi (ubah status, catatan, penugasan), daftar pihak, dan log notifikasi.
+- Akun baru dan reset sandi menghasilkan **kata sandi sementara** yang wajib diganti saat login pertama. Akun yang dinonaktifkan langsung keluar dari panel.
+- Centang **Email/WA** pada akun agar staf tersebut menerima notifikasi tim.
+- Registrasi bisa **ditugaskan** ke staf; staf menerima email dan WhatsApp berisi ringkasan perkara.
 
 ## Mengubah formulir, chatbot, dan pesan (tanpa coding)
 
@@ -95,7 +137,8 @@ Semua bisa diedit admin di panel; setiap simpan menjadi **versi baru** (bisa dik
 - Anti-bot: honeypot, waktu pengisian minimum, rate limit per IP.
 - Email masuk: SPF/DKIM/DMARC, pola phishing, tautan IP/penyingkat, lampiran berbahaya, deteksi email otomatis/massal & batas balasan per pengirim (mencegah loop).
 - Template aman: nilai dari klien di-escape dan tidak dapat menyisipkan tombol/tautan; subjek dibersihkan dari injeksi header.
-- Admin: kata sandi scrypt, sesi bertanda tangan HMAC (HttpOnly, SameSite=Strict), proteksi CSRF, penguncian setelah gagal login berulang, header keamanan (CSP, X-Frame-Options, dll.), ekspor CSV aman dari *formula injection*.
+- Admin: akun per staf dengan peran admin/staf, kata sandi scrypt, kata sandi sementara wajib diganti, sesi bertanda tangan HMAC (HttpOnly, SameSite=Strict) yang langsung dicabut saat akun dinonaktifkan atau sandi diganti, proteksi CSRF, penguncian setelah gagal login berulang, header keamanan (CSP, X-Frame-Options, dll.), ekspor CSV aman dari *formula injection*.
+- Webhook WhatsApp diverifikasi dengan tanda tangan `X-Hub-Signature-256` (App Secret).
 - Seluruh aksi agen & admin tercatat di **Log Audit**.
 
 ## Produksi

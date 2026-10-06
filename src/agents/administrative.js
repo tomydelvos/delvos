@@ -294,10 +294,11 @@ async function handleSubmission({ body, files = [], ip }) {
 // ---------------------------------------------------------------------------
 // 3. Status changes decided by the team
 // ---------------------------------------------------------------------------
-function changeStatus(id, status, { actor, message = '', notifyClient = true, assignedTo } = {}) {
+function changeStatus(id, status, { actor, message = '', notifyClient = true } = {}) {
   if (!STATUSES[status]) throw Object.assign(new Error('Status tidak dikenal'), { status: 400 });
   const sub = loadSubmission(id);
   if (!sub) throw Object.assign(new Error('Registrasi tidak ditemukan'), { status: 404 });
+  if (sub.status === status) throw Object.assign(new Error(`Status sudah "${STATUSES[status]}".`), { status: 400 });
   const msg = security.clean(message, 4000);
   const sendLetter = notifyClient && CLIENT_LETTER_STATUSES.includes(status);
   if (sendLetter && MESSAGE_REQUIRED.includes(status) && !msg) {
@@ -307,8 +308,7 @@ function changeStatus(id, status, { actor, message = '', notifyClient = true, as
   }
 
   db.prepare(`UPDATE submissions SET status = ?, updated_at = datetime('now'),
-    first_reviewed_at = COALESCE(first_reviewed_at, CASE WHEN ? != 'baru' THEN datetime('now') END),
-    assigned_to = COALESCE(?, assigned_to) WHERE id = ?`).run(status, status, assignedTo || null, id);
+    first_reviewed_at = COALESCE(first_reviewed_at, CASE WHEN ? != 'baru' THEN datetime('now') END) WHERE id = ?`).run(status, status, id);
   addEvent(id, 'status', actor, { from: sub.status, to: status, message: msg, notified: sendLetter });
   audit(`admin:${actor}`, 'ubah_status', { reg: sub.reg_no, from: sub.status, to: status, notified: sendLetter });
 
@@ -317,6 +317,27 @@ function changeStatus(id, status, { actor, message = '', notifyClient = true, as
     const vars = { ...submissionVars(updated), custom_message: msg };
     outbox.emailTemplate(`status_${status}`, updated.client_email, vars, { related: updated.reg_no });
     if (config.whatsapp.notifyClient && updated.client_phone) outbox.whatsappTemplate('status_client', updated.client_phone, vars, { related: updated.reg_no });
+  }
+  return loadSubmission(id);
+}
+
+/** Assign a registration to a staff member and notify them (email + WhatsApp when available). */
+function assign(id, username, { actor, note = '' } = {}) {
+  const sub = loadSubmission(id);
+  if (!sub) throw Object.assign(new Error('Registrasi tidak ditemukan'), { status: 404 });
+  const users = require('../users');
+  const user = username ? users.byUsername(username) : null;
+  if (username && (!user || !user.active)) throw Object.assign(new Error('Pengguna tidak ditemukan atau nonaktif'), { status: 400 });
+  const value = user ? user.username : null;
+  if (value === sub.assigned_to) return sub;
+  db.prepare(`UPDATE submissions SET assigned_to = ?, updated_at = datetime('now') WHERE id = ?`).run(value, id);
+  const text = security.clean(note, 1000);
+  addEvent(id, 'assign', actor, { from: sub.assigned_to, to: value, note: text });
+  audit(`admin:${actor}`, 'tugaskan', { reg: sub.reg_no, to: value });
+  if (user && user.username !== actor) {
+    const vars = { ...submissionVars(loadSubmission(id)), staff_name: user.name, assigned_by: actor, assign_note: text };
+    if (user.email) outbox.emailTemplate('assignment_staff', user.email, vars, { related: sub.reg_no });
+    if (user.whatsapp) outbox.whatsappTemplate('assignment_staff', user.whatsapp, vars, { related: sub.reg_no });
   }
   return loadSubmission(id);
 }
@@ -352,6 +373,6 @@ function lookupStatus(regNo, email) {
 
 module.exports = {
   AGENT, STATUSES, CLIENT_LETTER_STATUSES, MESSAGE_REQUIRED, SubmissionError,
-  handleInboundEmail, handleSubmission, changeStatus, addNote,
+  handleInboundEmail, handleSubmission, changeStatus, assign, addNote,
   loadSubmission, submissionVars, answersFor, publicStatus, lookupStatus, statusLink, officeHoursNote,
 };

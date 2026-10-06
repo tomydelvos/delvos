@@ -20,6 +20,19 @@
     </form>
   </div>
 
+  <div id="pw-screen" class="login" hidden>
+    <form id="pw-form" class="login-card">
+      <div class="login-logo">🔑</div>
+      <h1>Ganti kata sandi</h1>
+      <p class="muted">Anda masuk dengan kata sandi sementara. Buat kata sandi baru (minimal 10 karakter) untuk melanjutkan.</p>
+      <label>Kata sandi sementara <input name="current" type="password" autocomplete="current-password" required></label>
+      <label>Kata sandi baru <input name="next" type="password" autocomplete="new-password" minlength="10" required></label>
+      <label>Ulangi kata sandi baru <input name="confirm" type="password" autocomplete="new-password" minlength="10" required></label>
+      <div class="alert error" id="pw-error" hidden></div>
+      <button class="btn primary block" type="submit">Simpan & lanjutkan</button>
+    </form>
+  </div>
+
   <div id="app" class="layout" hidden>
     <aside class="sidebar" id="sidebar">
       <div class="side-brand"><span class="logo">⚖</span><span id="side-firm">Kantor Hukum</span></div>
@@ -28,16 +41,18 @@
         <a href="#dashboard" data-route="dashboard">📊 Dasbor</a>
         <a href="#inquiries" data-route="inquiries">📩 Email Masuk</a>
         <a href="#submissions" data-route="submissions">🗂 Registrasi Klien</a>
-        <div class="nav-group">Konfigurasi</div>
-        <a href="#form" data-route="form">📝 Formulir Registrasi</a>
-        <a href="#chatbot" data-route="chatbot">💬 Alur Chatbot</a>
-        <a href="#templates" data-route="templates">✉️ Template Pesan</a>
-        <a href="#settings" data-route="settings">🏢 Profil Kantor</a>
+        <div class="nav-group" data-admin>Konfigurasi</div>
+        <a href="#form" data-route="form" data-admin>📝 Formulir Registrasi</a>
+        <a href="#chatbot" data-route="chatbot" data-admin>💬 Alur Chatbot</a>
+        <a href="#templates" data-route="templates" data-admin>✉️ Template Pesan</a>
+        <a href="#settings" data-route="settings" data-admin>🏢 Profil Kantor</a>
         <div class="nav-group">Keamanan & Sistem</div>
         <a href="#parties" data-route="parties">⚖ Daftar Pihak (Konflik)</a>
         <a href="#notifications" data-route="notifications">🔔 Log Notifikasi</a>
-        <a href="#audit" data-route="audit">🛡 Log Audit</a>
-        <a href="#tools" data-route="tools">🧪 Uji Coba</a>
+        <a href="#users" data-route="users" data-admin>👥 Pengguna</a>
+        <a href="#audit" data-route="audit" data-admin>🛡 Log Audit</a>
+        <a href="#tools" data-route="tools" data-admin>🧪 Uji Coba</a>
+        <a href="#account" data-route="account">👤 Akun Saya</a>
       </nav>
       <div class="side-foot">
         <span id="side-user"></span>

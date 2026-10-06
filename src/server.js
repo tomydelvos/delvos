@@ -5,10 +5,11 @@ const config = require('./config');
 const settings = require('./settings');
 const security = require('./agents/security');
 const ops = require('./agents/operational');
-const auth = require('./util/auth');
+const users = require('./users');
 
 function createApp() {
   settings.ensureDefaults();
+  users.ensureInitialAdmin(); // prints a generated first-run password if none is configured
   const app = express();
   app.disable('x-powered-by');
   if (config.security.trustProxy) app.set('trust proxy', 1);
@@ -16,6 +17,7 @@ function createApp() {
 
   app.use('/api/public', express.json({ limit: '50kb' }), require('./routes/public'));
   app.use('/api/admin', require('./routes/admin'));
+  app.use('/webhooks', require('./routes/webhooks'));
 
   const pub = path.join(config.root, 'public');
   const page = (file) => (req, res) => res.sendFile(path.join(pub, file));
@@ -38,7 +40,6 @@ function createApp() {
 
 if (require.main === module) {
   const app = createApp();
-  auth.passwordHash(); // prints the generated first-run password if none is configured
   app.listen(config.port, () => {
     console.log(`Kantor virtual berjalan di ${config.publicUrl}`);
     console.log(`  Chatbot klien : ${config.publicUrl}/`);

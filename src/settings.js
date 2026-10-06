@@ -113,10 +113,21 @@ function ensureDefaults() {
   }
 }
 
+/** Templates added in newer versions appear automatically for offices that saved older template sets. */
+function withNewTemplates(value) {
+  const defaults = loadDefault('templates');
+  for (const ch of Object.keys(defaults)) {
+    value[ch] ||= {};
+    for (const [k, v] of Object.entries(defaults[ch])) if (value[ch][k] === undefined) value[ch][k] = v;
+  }
+  return value;
+}
+
 function getRow(key) {
   const row = db.prepare('SELECT value, version, updated_at, updated_by FROM settings WHERE key = ?').get(key);
   if (!row) return null;
-  return { value: json.parse(row.value), version: row.version, updatedAt: row.updated_at, updatedBy: row.updated_by };
+  const value = json.parse(row.value);
+  return { value: key === 'templates' ? withNewTemplates(value) : value, version: row.version, updatedAt: row.updated_at, updatedBy: row.updated_by };
 }
 
 function get(key) {

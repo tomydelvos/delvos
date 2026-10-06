@@ -28,6 +28,7 @@
     const res = await fetch(`/api/admin${path}`, init);
     const body = await res.json().catch(() => ({}));
     if (res.status === 401 && path !== '/login') { showLogin(); throw new Error(body.error || 'Sesi berakhir'); }
+    if (res.status === 403 && body.mustChangePassword) { showPasswordScreen(); throw new Error(body.error); }
     if (!res.ok) throw Object.assign(new Error(body.error || `Gagal (${res.status})`), { body });
     return body;
   }
@@ -63,17 +64,24 @@
   const INQ_STATUS = { new: 'Baru', invited: 'Diundang isi formulir', registered: 'Sudah registrasi', replied: 'Dibalas (lanjutan)', spam: 'Spam', ignored: 'Diabaikan' };
 
   // ================================================================ auth & routing
-  function showLogin() { $('#app').hidden = true; $('#login-screen').hidden = false; }
+  let ME = null;
+  const isAdmin = () => ME?.role === 'admin';
+  function showLogin() { $('#app').hidden = true; $('#pw-screen').hidden = true; $('#login-screen').hidden = false; }
+  function showPasswordScreen() { $('#app').hidden = true; $('#login-screen').hidden = true; $('#pw-screen').hidden = false; }
   async function boot() {
     try {
-      const me = await api('/me');
-      $('#side-user').textContent = me.username;
-      $('#login-screen').hidden = true; $('#app').hidden = false;
+      ME = await api('/me');
+    } catch { showLogin(); return; }
+    if (ME.mustChangePassword) { showPasswordScreen(); return; }
+    $('#side-user').textContent = `${ME.name} (${ME.role})`;
+    for (const n of document.querySelectorAll('[data-admin]')) n.hidden = !isAdmin();
+    $('#login-screen').hidden = true; $('#pw-screen').hidden = true; $('#app').hidden = false;
+    try {
       const office = await api('/settings/office');
       $('#side-firm').textContent = office.value.name;
       STATUSES = office.meta.statuses;
       route();
-    } catch { showLogin(); }
+    } catch (err) { toast(err.message, 'error'); }
   }
 
   $('#login-form').addEventListener('submit', async (e) => {
@@ -83,6 +91,20 @@
     errBox.hidden = true;
     try {
       await api('/login', { method: 'POST', body: { username: fd.get('username'), password: fd.get('password') } });
+      e.target.reset();
+      boot();
+    } catch (err) { errBox.textContent = err.message; errBox.hidden = false; }
+  });
+  $('#pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const errBox = $('#pw-error');
+    errBox.hidden = true;
+    try {
+      if (fd.get('next') !== fd.get('confirm')) throw new Error('Konfirmasi kata sandi tidak sama.');
+      await api('/password', { method: 'POST', body: { current: fd.get('current'), next: fd.get('next') } });
+      e.target.reset();
+      toast('Kata sandi diganti');
       boot();
     } catch (err) { errBox.textContent = err.message; errBox.hidden = false; }
   });
@@ -98,7 +120,8 @@
     const map = { inquiry: 'inquiries', submission: 'submissions' };
     for (const a of document.querySelectorAll('[data-route]')) a.classList.toggle('active', a.dataset.route === (map[name] || name));
     $('#sidebar').classList.remove('open');
-    const fn = routes[name] || routes.dashboard;
+    const ADMIN_ROUTES = ['form', 'chatbot', 'templates', 'settings', 'users', 'audit', 'tools'];
+    const fn = (ADMIN_ROUTES.includes(name) && !isAdmin()) ? routes.dashboard : (routes[name] || routes.dashboard);
     clear(view()).append(el('p', { class: 'muted', text: 'Memuat…' }));
     Promise.resolve(fn(id)).catch((err) => clear(view()).append(errorBox(err)));
   }
@@ -141,7 +164,7 @@
     v.append(el('div', { class: 'card' }, el('h2', { text: 'Kanal komunikasi' }),
       el('ul', { style: 'list-style:none;padding:0;margin:0;display:grid;gap:6px' },
         ch(c.smtp, 'Email keluar (SMTP)'), ch(c.imap, 'Email masuk (IMAP)'),
-        ch(c.whatsapp !== 'log', 'WhatsApp', `penyedia: ${c.whatsapp}, ${c.whatsappTeam} nomor tim`),
+        ch(c.whatsapp !== 'log', 'WhatsApp', `penyedia: ${c.whatsapp}${c.whatsappMode ? ` (mode ${c.whatsappMode}, webhook ${c.whatsappWebhook ? 'aktif' : 'belum diatur'})` : ''}, ${c.whatsappTeam} nomor tim`),
         ch(c.telegram, 'Telegram'), ch(c.teamEmails > 0, 'Email tim', `${c.teamEmails} alamat`, 'Belum diatur'), ch(c.ai, 'AI Claude', 'opsional', 'Nonaktif'),
       ),
       el('p', { class: 'muted small', text: `URL publik: ${c.publicUrl}. Kanal berstatus "Simulasi" mencetak pesan ke log server — atur kredensial di file .env.` })));
@@ -242,7 +265,7 @@
     st.addEventListener('change', load);
     v.append(pageHead('Registrasi Klien', 'Formulir registrasi calon klien',
       el('div', { style: 'width:280px' }, q), el('div', { style: 'width:200px' }, st),
-      el('a', { class: 'btn', href: '/api/admin/submissions.csv', text: '⬇ Ekspor CSV' })), box);
+      isAdmin() ? el('a', { class: 'btn', href: '/api/admin/submissions.csv', text: '⬇ Ekspor CSV' }) : null), box);
     load();
   };
 
@@ -278,7 +301,6 @@
     const statusSel = el('select', {}, Object.entries(STATUSES).map(([k, l]) => el('option', { value: k, text: l, selected: k === s.status })));
     const msg = el('textarea', { placeholder: 'Pesan untuk klien (dimasukkan ke surat email)…' });
     const notify = el('input', { type: 'checkbox', checked: true });
-    const assigned = el('input', { type: 'text', value: s.assigned_to || '', placeholder: 'Nama advokat/staf penanggung jawab' });
     const hint = el('div', { class: 'muted small' });
     const HINTS = {
       ditinjau: 'Surat: pemberitahuan bahwa pendaftaran sedang ditinjau. Pesan opsional.',
@@ -293,12 +315,24 @@
     const actions = el('div', { class: 'card' }, el('h2', { text: 'Tindak lanjut' }),
       el('label', { class: 'f' }, 'Status baru', statusSel), hint,
       el('label', { class: 'f', style: 'margin-top:8px' }, 'Pesan untuk klien', msg),
-      el('label', { class: 'f' }, 'Penanggung jawab', assigned),
       el('label', { class: 'inline' }, notify, 'Kirim surat email (dan WhatsApp) ke klien'),
       el('div', { style: 'margin-top:10px' }, el('button', { class: 'btn primary', text: 'Simpan status', onclick: guard(async () => {
-        await api(`/submissions/${id}/status`, { method: 'POST', body: { status: statusSel.value, message: msg.value, notifyClient: notify.checked, assignedTo: assigned.value } });
+        await api(`/submissions/${id}/status`, { method: 'POST', body: { status: statusSel.value, message: msg.value, notifyClient: notify.checked } });
         toast(notify.checked ? 'Status disimpan dan klien diberi tahu' : 'Status disimpan'); route();
       }) })));
+
+    // Assignment
+    const staff = await api('/users/brief');
+    const assignSel = el('select', {}, el('option', { value: '', text: '— Belum ditugaskan —' }),
+      staff.map((u) => el('option', { value: u.username, text: `${u.name} (${u.username})`, selected: u.username === s.assigned_to })));
+    const assignNote = el('input', { type: 'text', placeholder: 'Catatan untuk staf (opsional)' });
+    const assignCard = el('div', { class: 'card' }, el('h2', { text: '📌 Penanggung jawab' }),
+      el('label', { class: 'f' }, 'Tugaskan ke', assignSel), assignNote,
+      el('p', { class: 'muted small', text: 'Staf yang ditugaskan menerima email & WhatsApp berisi ringkasan registrasi.' }),
+      el('button', { class: 'btn', text: 'Simpan penugasan', onclick: guard(async () => {
+        await api(`/submissions/${id}/assign`, { method: 'POST', body: { username: assignSel.value, note: assignNote.value } });
+        toast(assignSel.value ? 'Ditugaskan & staf diberi tahu' : 'Penugasan dihapus'); route();
+      }) }));
 
     const note = el('textarea', { placeholder: 'Catatan internal (tidak dikirim ke klien)…' });
     const notesCard = el('div', { class: 'card' }, el('h2', { text: 'Catatan internal' }), note,
@@ -313,7 +347,7 @@
       s.ai.risk_notes ? el('p', { class: 'muted', text: `Risiko: ${s.ai.risk_notes}` }) : null,
       el('p', { class: 'muted small', text: 'Dihasilkan otomatis — verifikasi sebelum digunakan. Bukan nasihat hukum.' })) : null;
 
-    const EVENT = { created: 'Registrasi diterima', status: 'Perubahan status', note: 'Catatan', email: 'Email lanjutan dari klien', conflict: 'Pemeriksaan konflik' };
+    const EVENT = { created: 'Registrasi diterima', status: 'Perubahan status', note: 'Catatan', email: 'Email lanjutan dari klien', conflict: 'Pemeriksaan konflik', assign: 'Penugasan', whatsapp: 'Pesan WhatsApp dari klien' };
     const timeline = el('div', { class: 'card' }, el('h2', { text: 'Riwayat' }), el('ul', { class: 'timeline' }, s.events.map((e) => el('li', {},
       el('div', { class: 'when', text: `${fmt(e.created_at)} · ${e.actor}` }),
       el('strong', { text: EVENT[e.type] || e.type }),
@@ -321,11 +355,13 @@
       e.payload.message ? el('div', { class: 'pre', text: e.payload.message }) : null,
       e.payload.note ? el('div', { class: 'pre', text: e.payload.note }) : null,
       e.payload.snippet ? el('div', { class: 'muted', text: `${e.payload.subject || ''} — ${e.payload.snippet}` }) : null,
-      e.type === 'conflict' ? el('div', { class: 'muted', text: `${e.payload.hits} indikasi` }) : null))));
+      e.type === 'conflict' ? el('div', { class: 'muted', text: `${e.payload.hits} indikasi` }) : null,
+      e.type === 'assign' ? el('div', { text: `${e.payload.from || '—'} → ${e.payload.to || '—'}` }) : null,
+      e.type === 'whatsapp' ? el('div', { class: 'pre', text: `${e.payload.from}: ${e.payload.text}` }) : null))));
 
     v.append(el('div', { class: 'split' },
       el('div', {}, answers, s.inquiry ? el('div', { class: 'card' }, el('h2', { text: `Email awal (${s.inquiry.ref})` }), el('div', { class: 'pre', text: `${s.inquiry.subject || ''}\n\n${s.inquiry.body_text || ''}` })) : null),
-      el('div', {}, actions, ai, notesCard, timeline, notifCard(s.notifications))));
+      el('div', {}, actions, assignCard, ai, notesCard, timeline, notifCard(s.notifications))));
   };
 
   // ================================================================ form builder
@@ -600,6 +636,7 @@
       status_diterima: ['Status: diterima sebagai klien', 'status'],
       status_ditolak: ['Status: tidak dapat ditangani', 'status'],
       sla_team: ['Eskalasi SLA (ke email tim)', 'sla'],
+      assignment_staff: ['Penugasan (ke email staf)', 'assign'],
     },
     whatsapp: {
       inquiry_team: ['Email masuk baru (ke WA tim)', 'inquiry'],
@@ -607,12 +644,14 @@
       submission_client: ['Konfirmasi registrasi (ke WA klien)', 'submission'],
       status_client: ['Perubahan status (ke WA klien)', 'status'],
       sla_team: ['Peringatan SLA (ke WA tim)', 'sla'],
+      assignment_staff: ['Penugasan (ke WA staf)', 'assign'],
     },
     telegram: {
       inquiry_team: ['Email masuk baru (ke Telegram tim)', 'inquiry'],
       submission_team: ['Registrasi baru (ke Telegram tim)', 'submission'],
       sla_team: ['Peringatan SLA (ke Telegram tim)', 'sla'],
       digest_team: ['Ringkasan harian (ke Telegram tim)', 'digest'],
+      wa_inbound_team: ['Pesan WhatsApp masuk dari klien (ke Telegram tim)', 'wa'],
     },
   };
   const VARS = {
@@ -621,6 +660,8 @@
     submission: ['reg_no', 'client_name', 'client_email', 'client_phone', 'matter_type', 'urgency', 'urgency_tag', 'preferred_contact', 'submitted_at', 'sla_due', 'status_label', 'status_link', 'admin_link', 'conflict_text', 'ai_summary', 'description_snippet', '{summary_html}'],
     status: ['reg_no', 'client_name', 'status_label', 'status_link', 'custom_message', 'matter_type'],
     sla: ['reg_no', 'client_name', 'matter_type', 'urgency', 'age_hours', 'admin_link'],
+    assign: ['reg_no', 'client_name', 'matter_type', 'urgency', 'conflict_text', 'sla_due', 'ai_summary', 'staff_name', 'assigned_by', 'assign_note', 'admin_link'],
+    wa: ['wa_from', 'wa_name', 'wa_text', 'reg_no', 'client_name', 'admin_link'],
     digest: ['date', 'inquiries_24h', 'submissions_24h', 'pending_review', 'overdue', 'failed_notifications'],
   };
   VARS.both = [...new Set([...VARS.inquiry, ...VARS.submission])];
@@ -722,8 +763,85 @@
           el('label', { class: 'f' }, 'Teks jam kerja', el('input', { type: 'text', value: o.officeHours.label, onchange: (e) => { o.officeHours.label = e.target.value; dirty = true; } })),
           f('Target respons (jam)', 'slaHours', 'Dijanjikan ke klien & dipantau Agen Operasional', 'number'),
           f('Pengingat isi formulir setelah (jam)', 'inviteReminderHours', '0 = nonaktif. Dikirim sekali, hanya di jam kerja.', 'number'),
-          f('Jam kirim ringkasan harian', 'dailyDigestHour', '0–23, waktu kantor', 'number')),
-        passwordCard())));
+          f('Jam kirim ringkasan harian', 'dailyDigestHour', '0–23, waktu kantor', 'number')))));
+  };
+
+  // ================================================================ users (admin)
+  let pendingTempPassword = null; // shown after the list re-renders following account creation
+  routes.users = async () => {
+    const { users, roles } = await api('/users');
+    const v = clear(view());
+    const notice = el('div');
+    const showTemp = (username, pw) => {
+      clear(notice).append(el('div', { class: 'alert ok' },
+        el('strong', { text: `Kata sandi sementara untuk ${username}: ` }), el('code', { text: pw }),
+        el('div', { class: 'small', text: 'Sampaikan secara langsung/terpisah (jangan lewat email yang sama). Ditampilkan sekali saja; pengguna wajib menggantinya saat login pertama.' }),
+        el('button', { class: 'btn sm', style: 'margin-top:6px', text: 'Salin', onclick: () => navigator.clipboard?.writeText(pw).then(() => toast('Disalin')) })));
+    };
+    const form = {
+      username: el('input', { type: 'text', placeholder: 'mis. rina' }),
+      name: el('input', { type: 'text', placeholder: 'Nama lengkap' }),
+      email: el('input', { type: 'email', placeholder: 'email@kantor.id' }),
+      whatsapp: el('input', { type: 'text', placeholder: '08xxxxxxxxxx' }),
+      role: el('select', {}, Object.entries(roles).map(([k, l]) => el('option', { value: k, text: l, selected: k === 'staf' }))),
+      notify_email: el('input', { type: 'checkbox', checked: true }),
+      notify_whatsapp: el('input', { type: 'checkbox' }),
+    };
+    v.append(pageHead('Pengguna', 'Akun staf untuk panel admin. Admin: semua fitur. Staf: email masuk, registrasi, penugasan, daftar pihak.'), notice);
+    if (pendingTempPassword) { showTemp(...pendingTempPassword); pendingTempPassword = null; }
+    v.append(el('div', { class: 'card' }, el('h2', { text: 'Tambah pengguna' }),
+      el('div', { class: 'grid cols-3' },
+        el('label', { class: 'f' }, 'Username', form.username), el('label', { class: 'f' }, 'Nama', form.name), el('label', { class: 'f' }, 'Peran', form.role),
+        el('label', { class: 'f' }, 'Email', form.email), el('label', { class: 'f' }, 'WhatsApp', form.whatsapp),
+        el('div', {}, el('div', { class: 'small muted', style: 'margin-bottom:6px', text: 'Terima notifikasi tim' }),
+          el('label', { class: 'inline' }, form.notify_email, 'Email'), el('label', { class: 'inline' }, form.notify_whatsapp, 'WhatsApp'))),
+      el('button', { class: 'btn primary', text: 'Buat akun', onclick: guard(async () => {
+        const r = await api('/users', { method: 'POST', body: {
+          username: form.username.value, name: form.name.value, email: form.email.value, whatsapp: form.whatsapp.value, role: form.role.value,
+          notify_email: form.notify_email.checked, notify_whatsapp: form.notify_whatsapp.checked,
+        } });
+        pendingTempPassword = [r.user.username, r.tempPassword];
+        await routes.users();
+      }) })));
+
+    const toggle = (u, key, label) => el('label', { class: 'inline' }, el('input', { type: 'checkbox', checked: Boolean(u[key]), onchange: guard(async (e) => {
+      try { await api(`/users/${u.id}`, { method: 'PUT', body: { [key]: e.target.checked } }); toast('Disimpan'); } catch (err) { e.target.checked = !e.target.checked; throw err; }
+    }) }), label);
+    v.append(simpleTable(['Pengguna', 'Kontak', 'Peran', 'Notifikasi tim', 'Login terakhir', 'Status', ''], users.map((u) => ({
+      cells: [
+        el('div', {}, el('strong', { text: u.name }), el('div', { class: 'muted small', text: u.username }), u.must_change_password ? el('span', { class: 'badge warn', text: 'sandi sementara' }) : null),
+        el('div', { class: 'small' }, el('div', { text: u.email || '—' }), el('div', { text: u.whatsapp || '—' })),
+        el('select', { onchange: guard(async (e) => { await api(`/users/${u.id}`, { method: 'PUT', body: { role: e.target.value } }).catch((err) => { e.target.value = u.role; throw err; }); toast('Peran diubah'); }) },
+          Object.entries(roles).map(([k, l]) => el('option', { value: k, text: l, selected: k === u.role }))),
+        el('div', {}, toggle(u, 'notify_email', 'Email'), toggle(u, 'notify_whatsapp', 'WA')),
+        fmt(u.last_login_at),
+        badge(u.active ? 'ok' : 'arsip', u.active ? 'Aktif' : 'Nonaktif'),
+        el('div', { class: 'toolbar' },
+          el('button', { class: 'btn sm', text: 'Edit', onclick: () => editUser(u) }),
+          el('button', { class: 'btn sm', text: 'Reset sandi', onclick: guard(async () => {
+            if (!confirm(`Buat kata sandi sementara baru untuk ${u.username}? Sesi aktifnya akan diakhiri.`)) return;
+            const r = await api(`/users/${u.id}/reset-password`, { method: 'POST' });
+            showTemp(u.username, r.tempPassword);
+          }) }),
+          el('button', { class: `btn sm ${u.active ? 'danger' : ''}`, text: u.active ? 'Nonaktifkan' : 'Aktifkan', onclick: guard(async () => {
+            if (u.active && !confirm(`Nonaktifkan ${u.username}? Ia langsung keluar dari panel.`)) return;
+            await api(`/users/${u.id}`, { method: 'PUT', body: { active: !u.active } }); routes.users();
+          }) })),
+      ],
+    }))));
+
+    async function editUser(u) {
+      const name = prompt('Nama', u.name); if (name == null) return;
+      const email = prompt('Email (kosongkan bila tidak ada)', u.email || ''); if (email == null) return;
+      const whatsapp = prompt('WhatsApp (kosongkan bila tidak ada)', u.whatsapp || ''); if (whatsapp == null) return;
+      await guard(async () => { await api(`/users/${u.id}`, { method: 'PUT', body: { name, email, whatsapp } }); toast('Disimpan'); routes.users(); })();
+    }
+  };
+
+  // ================================================================ my account
+  routes.account = async () => {
+    const me = await api('/me');
+    clear(view()).append(pageHead('Akun Saya', `${me.name} · ${me.username} · peran ${me.role}`), el('div', { class: 'grid cols-2' }, passwordCard()));
   };
 
   function passwordCard() {

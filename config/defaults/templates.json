@@ -43,6 +43,10 @@
     "sla_team": {
       "subject": "[PERINGATAN SLA] {{reg_no}} belum ditinjau ({{age_hours}} jam)",
       "body": "Registrasi {{reg_no}} atas nama {{client_name}} ({{matter_type}}, urgensi: {{urgency}}) belum ditinjau selama {{age_hours}} jam.\n\nMohon segera ditindaklanjuti agar komitmen respons kepada calon klien terpenuhi.\n\n[button:Buka di Panel Admin|{{admin_link}}]"
+    },
+    "assignment_staff": {
+      "subject": "[Penugasan] {{reg_no}} — {{client_name}} ({{matter_type}})",
+      "body": "Yth. {{staff_name}},\n\nAnda ditugaskan oleh {{assigned_by}} untuk menangani registrasi calon klien berikut.\n\nNo. registrasi: {{reg_no}}\nNama: {{client_name}}\nBidang: {{matter_type}}\nUrgensi: {{urgency}}\nPemeriksaan konflik: {{conflict_text}}\nTarget respons: {{sla_due}}\n\n{{#assign_note}}Catatan: {{assign_note}}{{/assign_note}}\n\n{{#ai_summary}}Ringkasan AI:\n{{ai_summary}}{{/ai_summary}}\n\n[button:Buka di Panel Admin|{{admin_link}}]"
     }
   },
   "whatsapp": {
@@ -50,12 +54,14 @@
     "submission_team": "🆕 *Registrasi baru* {{reg_no}}\nNama: {{client_name}}\nBidang: {{matter_type}}\nUrgensi: *{{urgency}}*\nKontak: {{client_phone}} / {{client_email}}\nKonflik: {{conflict_text}}\n\n{{description_snippet}}\n\nPanel: {{admin_link}}",
     "submission_client": "Yth. {{client_name}}, terima kasih telah mendaftar di *{{firm_name}}*.\n\nNo. registrasi Anda: *{{reg_no}}*\nTim kami akan menghubungi Anda dalam {{sla_hours}} jam kerja untuk menjadwalkan konsultasi.\n\nPantau status: {{status_link}}\n\n_Pesan otomatis — mohon tidak membagikan informasi sensitif melalui WhatsApp._",
     "status_client": "Yth. {{client_name}}, status pendaftaran *{{reg_no}}* kini: *{{status_label}}*.\nDetail telah kami kirimkan ke email Anda.\n\n— {{firm_name}}",
-    "sla_team": "⏰ *Peringatan SLA*: {{reg_no}} ({{client_name}}, urgensi {{urgency}}) belum ditinjau selama {{age_hours}} jam.\nPanel: {{admin_link}}"
+    "sla_team": "⏰ *Peringatan SLA*: {{reg_no}} ({{client_name}}, urgensi {{urgency}}) belum ditinjau selama {{age_hours}} jam.\nPanel: {{admin_link}}",
+    "assignment_staff": "📌 *Penugasan baru* dari {{assigned_by}}\n{{reg_no}} — {{client_name}}\nBidang: {{matter_type}} · Urgensi: {{urgency}}\nKonflik: {{conflict_text}}\nTarget respons: {{sla_due}}\n{{#assign_note}}Catatan: {{assign_note}}\n{{/assign_note}}Panel: {{admin_link}}"
   },
   "telegram": {
     "inquiry_team": "📩 <b>Email masuk baru</b> ({{ref}})\n<b>Dari:</b> {{client_name}} &lt;{{from_email}}&gt;\n<b>Perihal:</b> {{subject}}\n{{#ai_category}}<b>Kategori:</b> {{ai_category}}\n{{/ai_category}}<b>Keamanan:</b> {{security_text}}\n\n<i>{{snippet}}</i>\n\n<b>Auto-reply:</b> {{autoreply_text}}\n{{admin_link}}",
     "submission_team": "🆕 <b>Registrasi baru</b> {{reg_no}}\n<b>Nama:</b> {{client_name}}\n<b>Bidang:</b> {{matter_type}}\n<b>Urgensi:</b> {{urgency}}\n<b>Kontak:</b> {{client_phone}} / {{client_email}}\n<b>Konflik:</b> {{conflict_text}}\n{{#ai_summary}}\n<b>Ringkasan AI:</b> {{ai_summary}}\n{{/ai_summary}}\n<i>{{description_snippet}}</i>\n\n{{admin_link}}",
     "sla_team": "⏰ <b>Peringatan SLA</b>: {{reg_no}} ({{client_name}}, urgensi {{urgency}}) belum ditinjau selama {{age_hours}} jam.\n{{admin_link}}",
-    "digest_team": "📊 <b>Ringkasan harian {{date}}</b>\nEmail masuk (24 jam): {{inquiries_24h}}\nRegistrasi baru (24 jam): {{submissions_24h}}\nMenunggu tinjauan: {{pending_review}}\nMelewati SLA: {{overdue}}\nNotifikasi gagal: {{failed_notifications}}"
+    "digest_team": "📊 <b>Ringkasan harian {{date}}</b>\nEmail masuk (24 jam): {{inquiries_24h}}\nRegistrasi baru (24 jam): {{submissions_24h}}\nMenunggu tinjauan: {{pending_review}}\nMelewati SLA: {{overdue}}\nNotifikasi gagal: {{failed_notifications}}",
+    "wa_inbound_team": "💬 <b>Pesan WhatsApp masuk</b> dari {{wa_from}}{{#wa_name}} ({{wa_name}}){{/wa_name}}\n{{#reg_no}}<b>Registrasi:</b> {{reg_no}} — {{client_name}}\n{{/reg_no}}\n<i>{{wa_text}}</i>\n\nBalas dari aplikasi WhatsApp Business / nomor kantor.\n{{admin_link}}"
   }
 }

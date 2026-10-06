@@ -36,8 +36,8 @@ async function deliver(id) {
     } else {
       throw new Error(`Kanal tidak dikenal: ${claimed.channel}`);
     }
-    db.prepare(`UPDATE notifications SET status = ?, sent_at = datetime('now'), last_error = NULL WHERE id = ?`)
-      .run(result?.simulated ? 'simulated' : 'sent', id);
+    db.prepare(`UPDATE notifications SET status = ?, sent_at = datetime('now'), last_error = NULL, provider_id = ? WHERE id = ?`)
+      .run(result?.simulated ? 'simulated' : 'sent', result?.id ?? result?.messageId ?? null, id);
   } catch (err) {
     const failed = claimed.attempts >= MAX_ATTEMPTS;
     const backoffMin = Math.min(2 ** claimed.attempts, 240);
@@ -98,10 +98,11 @@ function telegramTemplate(key, chatId, vars, { related, buttonUrl, buttonLabel }
 /** Internal team alert on WhatsApp + Telegram (and email when withEmail is set). */
 function notifyTeam(key, vars, { related, withEmail = false } = {}) {
   const ids = [];
-  for (const phone of config.team.whatsapp) ids.push(whatsappTemplate(key, phone, vars, { related }));
+  const team = require('./users').teamRecipients();
+  for (const phone of team.whatsapp) ids.push(whatsappTemplate(key, phone, vars, { related }));
   const chatIds = config.telegram.chatIds.length ? config.telegram.chatIds : (config.telegram.botToken ? [] : ['(belum-dikonfigurasi)']);
   for (const chat of chatIds) ids.push(telegramTemplate(key, chat, vars, { related, buttonUrl: vars.admin_link, buttonLabel: 'Buka di Panel Admin' }));
-  if (withEmail) for (const email of config.team.emails) ids.push(emailTemplate(key, email, vars, { related }));
+  if (withEmail) for (const email of team.emails) ids.push(emailTemplate(key, email, vars, { related }));
   return ids.filter(Boolean);
 }
 

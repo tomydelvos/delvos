@@ -130,6 +130,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Staff accounts for the admin panel.
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+  name TEXT NOT NULL,
+  email TEXT,
+  whatsapp TEXT,
+  role TEXT NOT NULL DEFAULT 'staf',         -- admin | staf
+  password_hash TEXT NOT NULL,
+  must_change_password INTEGER NOT NULL DEFAULT 0,
+  session_version INTEGER NOT NULL DEFAULT 1,
+  notify_email INTEGER NOT NULL DEFAULT 1,   -- receives team alerts by email
+  notify_whatsapp INTEGER NOT NULL DEFAULT 0,-- receives team alerts on WhatsApp
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_login_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS counters (
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -140,6 +158,14 @@ CREATE TABLE IF NOT EXISTS kv (
   value TEXT NOT NULL
 );
 `);
+
+// Additive column migrations for databases created by earlier versions.
+function addColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+addColumn('notifications', 'provider_id', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_provider ON notifications(provider_id)');
 
 const json = {
   parse(text, fallback = null) {

@@ -12,6 +12,7 @@ const security = require('../agents/security');
 const admin = require('../agents/administrative');
 const ops = require('../agents/operational');
 const ai = require('../ai/claude');
+const users = require('../users');
 
 const router = express.Router();
 const actor = (req) => `admin:${req.admin}`;
@@ -19,16 +20,28 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 
 router.post('/login', express.json({ limit: '10kb' }), auth.login);
 router.post('/logout', auth.logout);
-router.use(auth.requireAdmin);
+router.use(auth.requireUser);
 router.use(express.json({ limit: '2mb' }));
+const adminOnly = auth.requireRole('admin');
 
-router.get('/me', (req, res) => res.json({ username: req.admin }));
+router.get('/me', (req, res) => res.json(auth.publicUser(req.user)));
 
 router.post('/password', (req, res) => {
-  auth.changePassword(req.body.current, req.body.next);
+  const updated = auth.changePassword(req, res, req.body.current, req.body.next);
   audit(actor(req), 'ganti_password', null, req.ip);
-  res.json({ ok: true });
+  res.json({ ok: true, user: auth.publicUser(updated) });
 });
+
+// ---------------------------------------------------------------------------
+// Users (admin only, except the brief list used for assignment)
+// ---------------------------------------------------------------------------
+router.get('/users/brief', (req, res) => {
+  res.json(db.prepare(`SELECT id, username, name, role FROM users WHERE active = 1 ORDER BY name`).all());
+});
+router.get('/users', adminOnly, (req, res) => res.json({ users: users.list(), roles: users.ROLES }));
+router.post('/users', adminOnly, (req, res) => res.json(users.create(req.body, req.admin)));
+router.put('/users/:id', adminOnly, (req, res) => res.json(users.update(Number(req.params.id), req.body, req.admin)));
+router.post('/users/:id/reset-password', adminOnly, (req, res) => res.json({ tempPassword: users.resetPassword(Number(req.params.id), req.admin) }));
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -51,9 +64,11 @@ router.get('/dashboard', (req, res) => {
       smtp: config.smtp.enabled,
       imap: config.imap.enabled,
       whatsapp: config.whatsapp.provider,
-      whatsappTeam: config.team.whatsapp.length,
+      whatsappTeam: users.teamRecipients().whatsapp.length,
+      whatsappMode: config.whatsapp.provider === 'meta' ? config.whatsapp.metaMode : null,
+      whatsappWebhook: Boolean(config.whatsapp.metaAppSecret && config.whatsapp.metaVerifyToken),
       telegram: config.telegram.enabled,
-      teamEmails: config.team.emails.length,
+      teamEmails: users.teamRecipients().emails.length,
       ai: ai.isEnabled(),
       publicUrl: config.publicUrl,
     },
@@ -121,7 +136,7 @@ router.get('/submissions', (req, res) => {
   res.json(rows.map((r) => ({ ...r, conflicts: json.parse(r.conflict_hits, []).length, conflict_hits: undefined })));
 });
 
-router.get('/submissions.csv', (req, res) => {
+router.get('/submissions.csv', adminOnly, (req, res) => {
   const rows = db.prepare('SELECT * FROM submissions ORDER BY id').all();
   const form = settings.get('form');
   const fieldIds = form.sections.flatMap((s) => s.fields).filter((f) => !['info', 'file'].includes(f.type));
@@ -163,9 +178,14 @@ router.get('/submissions/:id', (req, res) => {
 
 router.post('/submissions/:id/status', (req, res) => {
   const updated = admin.changeStatus(Number(req.params.id), req.body.status, {
-    actor: req.admin, message: req.body.message, notifyClient: req.body.notifyClient !== false, assignedTo: req.body.assignedTo,
+    actor: req.admin, message: req.body.message, notifyClient: req.body.notifyClient !== false,
   });
   res.json({ ok: true, status: updated.status });
+});
+
+router.post('/submissions/:id/assign', (req, res) => {
+  const updated = admin.assign(Number(req.params.id), req.body.username || null, { actor: req.admin, note: req.body.note });
+  res.json({ ok: true, assigned_to: updated.assigned_to });
 });
 
 router.post('/submissions/:id/note', (req, res) => {
@@ -203,7 +223,7 @@ router.get('/settings/:key', (req, res) => {
   res.json({ ...settings.getRow(req.params.key), meta: { fieldTypes: settings.FIELD_TYPES, fieldRoles: settings.FIELD_ROLES, statuses: admin.STATUSES } });
 });
 
-router.put('/settings/:key', (req, res) => {
+router.put('/settings/:key', adminOnly, (req, res) => {
   const version = settings.set(req.params.key, req.body.value, req.admin);
   audit(actor(req), 'ubah_pengaturan', { key: req.params.key, version }, req.ip);
   res.json({ ok: true, version });
@@ -215,7 +235,7 @@ router.get('/settings/:key/version/:v', (req, res) => {
   if (!value) throw httpError(404, 'Versi tidak ditemukan');
   res.json({ value });
 });
-router.post('/settings/:key/reset', (req, res) => {
+router.post('/settings/:key/reset', adminOnly, (req, res) => {
   const version = settings.set(req.params.key, settings.loadDefault(req.params.key), req.admin);
   audit(actor(req), 'reset_pengaturan', { key: req.params.key, version }, req.ip);
   res.json({ ok: true, version });
@@ -237,6 +257,8 @@ router.post('/preview', (req, res) => {
     custom_message: 'Contoh pesan dari tim: Senin, 12 Oktober 2026 pukul 10.00 WIB di kantor kami.', age_hours: 26,
     summary_html: '<table width="100%" style="border:1px solid #e3e7ee;border-radius:6px"><tr><td style="padding:8px;color:#6b7280">Bidang hukum</td><td style="padding:8px">Perdata &amp; Kontrak</td></tr><tr><td style="padding:8px;color:#6b7280">Urgensi</td><td style="padding:8px">Segera</td></tr></table>',
     summary_text: 'Bidang hukum: Perdata & Kontrak\nUrgensi: Segera',
+    staff_name: 'Rina Advokat', assigned_by: 'admin', assign_note: 'Mohon dihubungi hari ini.',
+    wa_from: '+6281234567890', wa_name: 'Budi', wa_text: 'Selamat siang, apakah jadwal konsultasi saya sudah ada?',
     date: '2026-10-06', inquiries_24h: 4, submissions_24h: 2, pending_review: 3, overdue: 1, failed_notifications: 0,
   };
   if (channel === 'email') return res.json(renderEmail(template, sample, office));
@@ -272,7 +294,7 @@ router.post('/parties', (req, res) => {
   res.json({ ok: true, added });
 });
 
-router.delete('/parties/:id', (req, res) => {
+router.delete('/parties/:id', adminOnly, (req, res) => {
   db.prepare('DELETE FROM parties WHERE id = ?').run(req.params.id);
   audit(actor(req), 'hapus_pihak', { id: req.params.id }, req.ip);
   res.json({ ok: true });
@@ -292,11 +314,11 @@ router.post('/notifications/:id/retry', (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/audit', (req, res) => {
+router.get('/audit', adminOnly, (req, res) => {
   res.json(db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT 300').all());
 });
 
-router.post('/simulate-email', async (req, res) => {
+router.post('/simulate-email', adminOnly, async (req, res) => {
   const { fromName, fromEmail, subject, text } = req.body;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail || '')) throw httpError(400, 'Email pengirim tidak valid');
   const result = await admin.handleInboundEmail({
@@ -306,18 +328,19 @@ router.post('/simulate-email', async (req, res) => {
   res.json(result);
 });
 
-router.post('/test-channel', async (req, res) => {
+router.post('/test-channel', adminOnly, async (req, res) => {
   const { channel, to } = req.body;
   const text = `Tes notifikasi dari panel admin ${settings.get('office').name} (${new Date().toLocaleString('id-ID')}).`;
   if (!['email', 'whatsapp', 'telegram'].includes(channel)) throw httpError(400, 'Kanal tidak valid');
-  const recipient = to || (channel === 'telegram' ? config.telegram.chatIds[0] : channel === 'whatsapp' ? config.team.whatsapp[0] : config.team.emails[0]);
+  const team = users.teamRecipients();
+  const recipient = to || (channel === 'telegram' ? config.telegram.chatIds[0] : channel === 'whatsapp' ? team.whatsapp[0] : team.emails[0]);
   if (!recipient) throw httpError(400, 'Isi tujuan pengiriman atau atur penerima tim di .env');
   const id = outbox.enqueue({ channel, to: recipient, subject: 'Tes notifikasi', text, html: channel === 'email' ? `<p>${text}</p>` : null, related: 'tes' });
   await new Promise((r) => setTimeout(r, 2500));
   res.json(db.prepare('SELECT id, status, last_error FROM notifications WHERE id = ?').get(id));
 });
 
-router.post('/run/:job', async (req, res) => {
+router.post('/run/:job', adminOnly, async (req, res) => {
   const jobs = {
     'poll-mailbox': () => ops.pollMailbox(),
     'sla-check': () => ({ reminded: ops.checkSla() }),

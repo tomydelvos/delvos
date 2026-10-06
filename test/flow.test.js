@@ -59,7 +59,7 @@ test('email masuk → referensi, auto-reply dengan tautan formulir, notifikasi t
   const notes = notificationsFor(r.ref);
   const reply = notes.find((n) => n.channel === 'email');
   assert.ok(reply.body.includes(`/daftar?t=${inq.invite_token}`));
-  assert.ok(notes.some((n) => n.channel === 'whatsapp' && n.recipient === '081200000001'));
+  assert.ok(notes.some((n) => n.channel === 'whatsapp' && n.recipient === '6281200000001'));
   assert.ok(notes.some((n) => n.channel === 'telegram'));
 
   const dup = await admin.handleInboundEmail({ messageId: '<a1@x>', fromEmail: 'budi@contoh.id', text: 'x' });
