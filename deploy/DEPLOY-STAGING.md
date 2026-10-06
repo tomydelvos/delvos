@@ -18,6 +18,31 @@ Staging adalah salinan sistem yang terhubung ke Gmail, WhatsApp, Telegram, dan A
 
 > Jangan memakai inbox Gmail produksi untuk staging: kedua sistem akan berebut membaca email klien yang sama.
 
+## Deploy oleh Claude (via GitHub Actions) — direkomendasikan
+Claude tidak dapat membuka SSH langsung dari sesinya. Workflow `.github/workflows/deploy-staging.yml` di runner GitHub yang melakukan SSH ke VPS. Claude memicu workflow tersebut, membaca log, dan memperbaiki bila ada yang gagal. Setiap push ke branch juga otomatis men-deploy ulang.
+
+**Persiapan sekali saja (±15 menit):**
+
+1. **VPS & DNS**: buat VPS Ubuntu 22.04/24.04 (min. 1 vCPU / 1 GB) dan arahkan record **A** subdomain staging ke IP-nya.
+2. **Kunci deploy**: di komputer Anda (atau di VPS), buat pasangan kunci khusus deploy:
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C "deploy-staging" -f deploy_staging
+   ```
+   Tambahkan isi `deploy_staging.pub` ke `/root/.ssh/authorized_keys` di VPS (atau ke user yang punya sudo tanpa sandi).
+3. **Host key** (disarankan): jalankan `ssh-keyscan <IP_VPS>` dan simpan hasilnya.
+4. **GitHub Secrets**: repo → *Settings → Secrets and variables → Actions → New repository secret*:
+   | Nama | Isi |
+   |---|---|
+   | `STAGING_SSH_HOST` | IP VPS |
+   | `STAGING_SSH_USER` | `root` (atau user sudo) |
+   | `STAGING_SSH_KEY` | seluruh isi file `deploy_staging` (kunci **privat**) |
+   | `STAGING_SSH_KNOWN_HOSTS` | hasil `ssh-keyscan` (opsional, disarankan) |
+   | `STAGING_SSH_PORT` | bila SSH bukan port 22 (opsional) |
+   | `STAGING_ENV` | isi lengkap `staging.env` berdasarkan `deploy/staging.env.example`. Pakai `STAGING_BASIC_AUTH_PASSWORD` (sandi biasa), bukan hash. `SESSION_SECRET` boleh dikosongkan. |
+5. Kabari Claude: "secrets sudah diisi". Claude akan menjalankan workflow, memantau log, dan melaporkan URL beserta hasil smoke test.
+
+Kunci privat dan kredensial hanya tersimpan terenkripsi di GitHub Secrets, tidak pernah lewat chat. Sandi penguji dalam bentuk teks biasa tidak disimpan di server (hanya hash-nya).
+
 ## Cara cepat: satu perintah
 Di VPS baru (sebagai root), setelah DNS subdomain mengarah ke IP server:
 ```bash

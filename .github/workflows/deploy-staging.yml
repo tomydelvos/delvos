@@ -1,0 +1,90 @@
+name: Deploy staging
+
+# Deploys the branch to the staging VPS over SSH, then smoke-tests it from the outside.
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   STAGING_SSH_HOST         VPS IP or hostname
+#   STAGING_SSH_USER         SSH user with sudo/root (e.g. root)
+#   STAGING_SSH_KEY          private key (ed25519) whose public key is in the VPS authorized_keys
+#   STAGING_ENV              full contents of deploy/staging.env (see deploy/staging.env.example)
+# Optional:
+#   STAGING_SSH_PORT         default 22
+#   STAGING_SSH_KNOWN_HOSTS  output of `ssh-keyscan <host>`; pins the host key (recommended)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/law-office-ai-agent-c8ckgb]
+    paths-ignore: ['**.md']
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check configuration
+        id: cfg
+        env:
+          HOST: ${{ secrets.STAGING_SSH_HOST }}
+          KEY: ${{ secrets.STAGING_SSH_KEY }}
+          ENVFILE: ${{ secrets.STAGING_ENV }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$KEY" ] || [ -z "$ENVFILE" ]; then
+            echo "::notice::Secrets staging belum lengkap (STAGING_SSH_HOST, STAGING_SSH_KEY, STAGING_ENV) — deploy dilewati."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+
+      - name: Test before deploying
+        if: steps.cfg.outputs.ready == 'true'
+        run: npm ci && npm test
+
+      - name: Prepare SSH
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          HOST: ${{ secrets.STAGING_SSH_HOST }}
+          PORT: ${{ secrets.STAGING_SSH_PORT }}
+          KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          else ssh-keyscan -p "${PORT:-22}" -T 15 "$HOST" > ~/.ssh/known_hosts; echo "::warning::STAGING_SSH_KNOWN_HOSTS belum diisi; host key dipercaya saat pertama terhubung."; fi
+          printf 'Host staging\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' \
+            "$HOST" "${PORT:-22}" "${{ secrets.STAGING_SSH_USER || 'root' }}" > ~/.ssh/config
+          ssh staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"'
+
+      - name: Upload configuration & deploy
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          ENVFILE: ${{ secrets.STAGING_ENV }}
+          SHA: ${{ github.sha }}
+        run: |
+          printf '%s\n' "$ENVFILE" | ssh staging 'umask 077; cat > /root/kantor-staging.env'
+          scp -q deploy/install-staging.sh staging:/root/install-staging.sh
+          ssh staging "sudo ENV_SOURCE=/root/kantor-staging.env BRANCH='${GITHUB_REF_NAME}' bash /root/install-staging.sh </dev/null"
+          ssh staging "cd /opt/kantor && echo \"Revisi di server: \$(git rev-parse --short HEAD) (diharapkan ${SHA::7})\""
+
+      - name: Smoke test from the internet
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          ENVFILE: ${{ secrets.STAGING_ENV }}
+        run: |
+          val() { printf '%s\n' "$ENVFILE" | grep -E "^$1=" | head -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'; }
+          DOMAIN=$(val STAGING_DOMAIN); USER=$(val STAGING_BASIC_AUTH_USER); PASS=$(val STAGING_BASIC_AUTH_PASSWORD); VERIFY=$(val WA_META_VERIFY_TOKEN)
+          echo "::add-mask::$PASS"
+          for i in $(seq 1 24); do curl -fsS "https://$DOMAIN/healthz" >/dev/null 2>&1 && break; echo "menunggu HTTPS… ($i)"; sleep 10; done
+          if [ -n "$PASS" ]; then bash deploy/smoke-test.sh "https://$DOMAIN" "$USER" "$PASS" "$VERIFY"
+          else curl -fsS "https://$DOMAIN/healthz"; echo; echo "::notice::STAGING_BASIC_AUTH_PASSWORD tidak ada di STAGING_ENV — smoke test lengkap dilewati."; fi
+
+      - name: Recent application logs
+        if: always() && steps.cfg.outputs.ready == 'true'
+        run: ssh staging 'cd /opt/kantor/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env logs --tail=60 app caddy' || true

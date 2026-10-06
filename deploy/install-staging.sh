@@ -6,6 +6,10 @@
 # Yang dilakukan: pasang Docker & firewall, clone repo ke /opt/kantor, menanyakan domain + kredensial,
 # membuat rahasia acak & hash sandi penguji, menjalankan stack, lalu smoke test.
 # Aman dijalankan ulang: staging.env yang sudah ada tidak ditimpa.
+#
+# Mode non-interaktif (dipakai GitHub Actions): ENV_SOURCE=/path/ke/staging.env — file itu disalin
+# (menimpa) ke deploy/staging.env, lalu tidak ada pertanyaan. Bila berisi STAGING_BASIC_AUTH_PASSWORD
+# tanpa STAGING_BASIC_AUTH_HASH, hash dibuat di server dan sandi teks biasa dihapus dari file.
 set -euo pipefail
 
 REPO="${REPO:-https://github.com/tomydelvos/delvos.git}"
@@ -22,12 +26,36 @@ ask_secret() { local v; read -r -s -p "$1: " v </dev/tty; echo >&2; echo "$v"; }
 say "1/6 Memasang Docker, git, dan firewall"
 if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | sh; fi
 apt-get update -qq && apt-get install -y -qq git curl ufw openssl >/dev/null
-ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
+# Keep the SSH port we are connected through open, even if it is not 22, before enabling the firewall.
+SSH_PORT="${SSH_PORT:-$(echo "${SSH_CONNECTION:-}" | awk '{print $4}')}"
+ufw allow "${SSH_PORT:-22}/tcp" >/dev/null && ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
 
 say "2/6 Mengambil kode"
 if [ -d "$DIR/.git" ]; then git -C "$DIR" fetch -q origin "$BRANCH" && git -C "$DIR" checkout -q "$BRANCH" && git -C "$DIR" pull -q --ff-only origin "$BRANCH"
 else git clone -q --branch "$BRANCH" "$REPO" "$DIR"; fi
 cd "$DIR/deploy"
+
+if [ -n "${ENV_SOURCE:-}" ]; then
+  [ -f "$ENV_SOURCE" ] || { echo "ENV_SOURCE tidak ditemukan: $ENV_SOURCE"; exit 1; }
+  install -m 600 "$ENV_SOURCE" staging.env && rm -f "$ENV_SOURCE"
+fi
+
+# Fill in derived values: basic-auth hash from a plain password, random session secret.
+finalize_env() {
+  local pw hash
+  pw=$(grep -E '^STAGING_BASIC_AUTH_PASSWORD=' staging.env | head -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//' || true)
+  if [ -n "$pw" ] && ! grep -qE "^STAGING_BASIC_AUTH_HASH=.+" staging.env; then
+    hash=$(docker run --rm caddy:2 caddy hash-password --plaintext "$pw")
+    sed -i '/^STAGING_BASIC_AUTH_HASH=/d' staging.env
+    echo "STAGING_BASIC_AUTH_HASH='$hash'" >> staging.env
+  fi
+  sed -i '/^STAGING_BASIC_AUTH_PASSWORD=/d' staging.env
+  if ! grep -qE "^SESSION_SECRET=.+" staging.env; then
+    sed -i '/^SESSION_SECRET=/d' staging.env
+    echo "SESSION_SECRET='$(openssl rand -base64 32)'" >> staging.env
+  fi
+  chmod 600 staging.env
+}
 
 if [ ! -f staging.env ]; then
   say "3/6 Konfigurasi (kosongkan bila belum punya — kanal itu akan berjalan simulasi)"
@@ -88,6 +116,8 @@ else
   VERIFY=$(grep '^WA_META_VERIFY_TOKEN=' staging.env | cut -d= -f2)
 fi
 
+finalize_env
+
 say "4/6 Membangun & menjalankan (beberapa menit pada kali pertama)"
 docker compose -f docker-compose.staging.yml --env-file staging.env up -d --build
 
@@ -98,7 +128,8 @@ say "6/6 Smoke test"
 if [ -n "$TESTER_PW" ]; then ./smoke-test.sh "https://$DOMAIN" "$TESTER" "$TESTER_PW" "$VERIFY" || true
 else echo "Jalankan: ./smoke-test.sh https://$DOMAIN $TESTER '<sandi-penguji>' $VERIFY"; fi
 
-( crontab -l 2>/dev/null | grep -v 'scripts/backup.js'; echo "30 1 * * * cd $DIR/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env exec -T app node scripts/backup.js >/dev/null 2>&1" ) | crontab -
+# An empty crontab makes grep -v exit 1; tolerate it so the backup job is still installed.
+( { crontab -l 2>/dev/null | grep -v 'scripts/backup.js'; } || true; echo "30 1 * * * cd $DIR/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env exec -T app node scripts/backup.js >/dev/null 2>&1" ) | crontab -
 
 cat <<EOF
 
