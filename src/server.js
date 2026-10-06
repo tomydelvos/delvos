@@ -14,6 +14,14 @@ function createApp() {
   app.disable('x-powered-by');
   if (config.security.trustProxy) app.set('trust proxy', 1);
   app.use(security.securityHeaders);
+  if (config.isStaging) app.use((req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); next(); });
+
+  // Liveness/readiness for Docker and uptime monitors (no secrets).
+  app.get('/healthz', (req, res) => {
+    let dbOk = true;
+    try { require('./db').db.prepare('SELECT 1').get(); } catch { dbOk = false; }
+    res.status(dbOk ? 200 : 503).json({ ok: dbOk, env: config.appEnv, version: require('../package.json').version, uptime: Math.round(process.uptime()) });
+  });
 
   app.use('/api/public', express.json({ limit: '50kb' }), require('./routes/public'));
   app.use('/api/admin', require('./routes/admin'));

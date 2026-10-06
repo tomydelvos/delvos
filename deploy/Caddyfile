@@ -1,0 +1,18 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$STAGING_DOMAIN} {
+	encode zstd gzip
+
+	# Seluruh situs staging dilindungi sandi agar tidak diakses orang luar.
+	# Webhook WhatsApp & healthcheck tetap terbuka (Meta tidak bisa mengisi basic auth;
+	# webhook sudah diamankan dengan tanda tangan X-Hub-Signature-256).
+	@protected not path /webhooks/* /healthz
+	basic_auth @protected {
+		{$STAGING_BASIC_AUTH_USER} {$STAGING_BASIC_AUTH_HASH}
+	}
+
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy app:3000
+}

@@ -485,6 +485,11 @@
 
   // ------------------------------------------------------------------ boot
   api(`/api/public/config${inviteToken ? `?t=${encodeURIComponent(inviteToken)}` : ''}`)
-    .then((cfg) => { CFG = cfg; applyBranding(cfg.office); route(); })
+    .then((cfg) => {
+      CFG = cfg;
+      if (cfg.environment === 'staging') document.body.prepend(el('div', { class: 'env-banner', text: 'STAGING — situs uji coba. Jangan kirim data perkara sungguhan.' }));
+      applyBranding(cfg.office);
+      route();
+    })
     .catch(() => { document.querySelector('main').textContent = 'Layanan sedang tidak tersedia. Silakan coba beberapa saat lagi.'; });
 })();

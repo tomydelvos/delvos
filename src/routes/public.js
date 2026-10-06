@@ -54,6 +54,7 @@ router.get('/config', security.limiter('config', 120, 60e3), (req, res) => {
     limits: { maxUploadMb: config.security.maxUploadMb, maxFiles: config.security.maxFiles },
     prefill,
     serverTime: Date.now(),
+    environment: config.appEnv,
   });
 });
 

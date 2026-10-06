@@ -1,0 +1,42 @@
+# Staging: aplikasi + Caddy (HTTPS otomatis Let's Encrypt).
+# Jalankan dari folder deploy/:  docker compose -f docker-compose.staging.yml --env-file staging.env up -d --build
+name: kantor-staging
+
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: staging.env
+    environment:
+      APP_ENV: staging
+      NODE_ENV: production
+      TRUST_PROXY: "true"
+      DATA_DIR: /app/data
+    volumes:
+      - app-data:/app/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN:?isi STAGING_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?isi ACME_EMAIL}
+      STAGING_BASIC_AUTH_USER: ${STAGING_BASIC_AUTH_USER:?isi STAGING_BASIC_AUTH_USER}
+      STAGING_BASIC_AUTH_HASH: ${STAGING_BASIC_AUTH_HASH:?isi STAGING_BASIC_AUTH_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

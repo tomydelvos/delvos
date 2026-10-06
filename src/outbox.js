@@ -12,10 +12,36 @@ const { sendTelegram } = require('./channels/telegram');
 
 const MAX_ATTEMPTS = 6;
 
+/**
+ * Staging guard: only team chats, staff accounts, and STAGING_ALLOWED_RECIPIENTS
+ * (emails, "@domain" entries, phone numbers) receive real messages. Everything else is
+ * stored as "blocked" so testers can read exactly what a client would have received.
+ */
+function stagingAllowed(channel, to) {
+  if (channel === 'telegram') return true;
+  const { normalizePhone } = require('./channels/whatsapp');
+  const target = channel === 'whatsapp' ? normalizePhone(to) : String(to).trim().toLowerCase();
+  if (!target) return false;
+  const staff = db.prepare('SELECT email, whatsapp FROM users WHERE active = 1').all();
+  const allowed = [...config.stagingAllow, ...staff.flatMap((u) => [u.email, u.whatsapp])].filter(Boolean);
+  return allowed.some((entry) => {
+    const e = String(entry).trim().toLowerCase();
+    if (channel === 'whatsapp') return normalizePhone(e) === target;
+    return e.startsWith('@') ? target.endsWith(e) : e === target;
+  });
+}
+
 function enqueue({ channel, to, subject = null, text, html = null, related = null, meta = {} }) {
-  const row = db.prepare(`INSERT INTO notifications(channel, recipient, subject, body, html, related, meta)
-    VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`).get(channel, to, subject, text, html, related, json.str(meta));
-  setImmediate(() => deliver(row.id).catch((err) => console.error('[outbox]', err)));
+  const blocked = config.isStaging && !stagingAllowed(channel, to);
+  if (config.isStaging) {
+    if (subject) subject = `[STAGING] ${subject}`;
+    text = channel === 'telegram' ? `🧪 <b>STAGING</b>\n${text}` : `[STAGING] ${text}`;
+    if (html) html = html.replace(/<body([^>]*)>/, '<body$1><div style="background:#b54708;color:#fff;text-align:center;padding:6px;font:600 13px sans-serif">STAGING — email uji coba, bukan dari layanan resmi</div>');
+  }
+  const row = db.prepare(`INSERT INTO notifications(channel, recipient, subject, body, html, related, meta, status, last_error)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).get(channel, to, subject, text, html, related, json.str(meta),
+    blocked ? 'blocked' : 'pending', blocked ? 'Staging: penerima tidak ada di daftar izin (pesan tidak dikirim)' : null);
+  if (!blocked) setImmediate(() => deliver(row.id).catch((err) => console.error('[outbox]', err)));
   return row.id;
 }
 
@@ -106,4 +132,4 @@ function notifyTeam(key, vars, { related, withEmail = false } = {}) {
   return ids.filter(Boolean);
 }
 
-module.exports = { enqueue, deliver, processDue, retry, emailTemplate, whatsappTemplate, telegramTemplate, notifyTeam, officeVars, MAX_ATTEMPTS };
+module.exports = { stagingAllowed, enqueue, deliver, processDue, retry, emailTemplate, whatsappTemplate, telegramTemplate, notifyTeam, officeVars, MAX_ATTEMPTS };

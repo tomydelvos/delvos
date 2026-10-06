@@ -141,6 +141,10 @@ Semua bisa diedit admin di panel; setiap simpan menjadi **versi baru** (bisa dik
 - Webhook WhatsApp diverifikasi dengan tanda tangan `X-Hub-Signature-256` (App Secret).
 - Seluruh aksi agen & admin tercatat di **Log Audit**.
 
+## Staging
+
+Panduan lengkap: [`deploy/DEPLOY-STAGING.md`](deploy/DEPLOY-STAGING.md). Docker + Caddy (HTTPS otomatis), situs dilindungi sandi, dan **pengaman pengiriman**: di `APP_ENV=staging` pesan hanya terkirim ke staf, grup Telegram, dan `STAGING_ALLOWED_RECIPIENTS`. Pesan lainnya tercatat sebagai *blocked*. Ada juga skrip `deploy/smoke-test.sh`, cadangan (`scripts/backup.js`), dan daftar uji UAT.
+
 ## Produksi
 
 1. Jalankan di VPS/server kantor di belakang Nginx/Caddy dengan **HTTPS**; set `NODE_ENV=production`, `PUBLIC_URL=https://…`, `TRUST_PROXY=true`.

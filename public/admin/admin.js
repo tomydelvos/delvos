@@ -74,6 +74,9 @@
     } catch { showLogin(); return; }
     if (ME.mustChangePassword) { showPasswordScreen(); return; }
     $('#side-user').textContent = `${ME.name} (${ME.role})`;
+    if (ME.environment === 'staging' && !$('.env-banner')) {
+      document.body.prepend(el('div', { class: 'env-banner', text: 'STAGING — pesan hanya dikirim ke staf & daftar izin; lainnya tercatat sebagai "blocked" di Log Notifikasi.' }));
+    }
     for (const n of document.querySelectorAll('[data-admin]')) n.hidden = !isAdmin();
     $('#login-screen').hidden = true; $('#pw-screen').hidden = true; $('#app').hidden = false;
     try {
@@ -883,12 +886,12 @@
   // ================================================================ notifications & audit
   routes.notifications = async () => {
     const v = clear(view());
-    const st = el('select', {}, ['', 'pending', 'sent', 'simulated', 'failed'].map((s) => el('option', { value: s, text: s || 'Semua status' })));
+    const st = el('select', {}, ['', 'pending', 'sent', 'simulated', 'blocked', 'failed'].map((s) => el('option', { value: s, text: s || 'Semua status' })));
     const box = el('div');
     const load = guard(async () => {
       const rows = await api(`/notifications?status=${st.value}`);
       clear(box).append(simpleTable(['Waktu', 'Kanal', 'Tujuan', 'Isi', 'Status', ''], rows.map((n) => ({
-        cells: [fmt(n.created_at), n.channel, n.recipient, el('div', {}, n.subject ? el('strong', { text: n.subject }) : null, el('div', { class: 'muted small', text: n.body.replace(/<[^>]+>/g, '').slice(0, 160) })),
+        cells: [fmt(n.created_at), n.channel, n.recipient, el('div', {}, n.subject ? el('strong', { text: n.subject }) : null, el('div', { class: 'muted small', text: plain(n.body).slice(0, 160) })),
           el('div', {}, badge(n.status), el('div', { class: 'small muted', text: `${n.attempts}x` }), n.last_error ? el('div', { class: 'small', style: 'color:var(--danger)', text: n.last_error }) : null),
           n.status === 'failed' ? el('button', { class: 'btn sm', text: 'Kirim ulang', onclick: guard(async () => { await api(`/notifications/${n.id}/retry`, { method: 'POST' }); toast('Dijadwalkan ulang'); setTimeout(load, 1500); }) }) : ''],
       }))));
@@ -930,6 +933,9 @@
               .map(([job, label]) => el('button', { class: 'btn', text: label, onclick: guard(async () => show(await api(`/run/${job}`, { method: 'POST' }))) })))),
         el('div', { class: 'card' }, el('h2', { text: 'Hasil' }), out))));
   };
+
+  const ENTITIES = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&amp;': '&' };
+  const plain = (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&(lt|gt|quot|#39|amp);/g, (m) => ENTITIES[m]);
 
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 

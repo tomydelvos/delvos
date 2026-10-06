@@ -33,6 +33,9 @@ const config = {
   port: int('PORT', 3000),
   publicUrl: env('PUBLIC_URL', `http://localhost:${int('PORT', 3000)}`).replace(/\/+$/, ''),
   isProduction: env('NODE_ENV') === 'production',
+  // development | staging | production. Staging only delivers to allow-listed recipients.
+  appEnv: env('APP_ENV', env('NODE_ENV') === 'production' ? 'production' : 'development'),
+  stagingAllow: list('STAGING_ALLOWED_RECIPIENTS'),
   dataDir: path.resolve(ROOT, env('DATA_DIR', 'data')),
   timezone: env('TZ_OFFICE', 'Asia/Jakarta'),
 
@@ -112,5 +115,6 @@ config.imap.enabled = Boolean(config.imap.host && config.imap.user && config.ima
 config.ai.enabled = config.ai.enabled && Boolean(env('ANTHROPIC_API_KEY') || env('ANTHROPIC_AUTH_TOKEN'));
 config.telegram.enabled = Boolean(config.telegram.botToken && config.telegram.chatIds.length);
 config.uploadDir = path.join(config.dataDir, 'uploads');
+config.isStaging = config.appEnv === 'staging';
 
 module.exports = config;

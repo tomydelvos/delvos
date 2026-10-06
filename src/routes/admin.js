@@ -24,7 +24,7 @@ router.use(auth.requireUser);
 router.use(express.json({ limit: '2mb' }));
 const adminOnly = auth.requireRole('admin');
 
-router.get('/me', (req, res) => res.json(auth.publicUser(req.user)));
+router.get('/me', (req, res) => res.json({ ...auth.publicUser(req.user), environment: config.appEnv }));
 
 router.post('/password', (req, res) => {
   const updated = auth.changePassword(req, res, req.body.current, req.body.next);
