@@ -33,7 +33,13 @@ jobs:
           HOST: ${{ secrets.STAGING_SSH_HOST || vars.STAGING_SSH_HOST }}
           KEY: ${{ secrets.STAGING_SSH_KEY }}
           ENVFILE: ${{ secrets.STAGING_ENV }}
+          # Names only (never values) — helps diagnose secrets saved in the wrong place or under another name.
+          SECRET_NAMES: ${{ toJSON(secrets) }}
+          VAR_NAMES: ${{ toJSON(vars) }}
         run: |
+          echo "Secret yang terlihat oleh workflow: $(printf '%s' "$SECRET_NAMES" | jq -r 'keys | join(", ")')"
+          echo "Variable yang terlihat oleh workflow: $(printf '%s' "$VAR_NAMES" | jq -r 'keys | join(", ")')"
+          unset SECRET_NAMES
           missing=""
           [ -n "$HOST" ] || missing="$missing STAGING_SSH_HOST"
           [ -n "$KEY" ] || missing="$missing STAGING_SSH_KEY"
