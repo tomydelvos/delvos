@@ -24,16 +24,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Loads secrets defined on the "staging" environment in addition to repository secrets.
+    environment: staging
     steps:
       - name: Check configuration
         id: cfg
         env:
-          HOST: ${{ secrets.STAGING_SSH_HOST }}
+          HOST: ${{ secrets.STAGING_SSH_HOST || vars.STAGING_SSH_HOST }}
           KEY: ${{ secrets.STAGING_SSH_KEY }}
           ENVFILE: ${{ secrets.STAGING_ENV }}
         run: |
-          if [ -z "$HOST" ] || [ -z "$KEY" ] || [ -z "$ENVFILE" ]; then
-            echo "::notice::Secrets staging belum lengkap (STAGING_SSH_HOST, STAGING_SSH_KEY, STAGING_ENV) — deploy dilewati."
+          missing=""
+          [ -n "$HOST" ] || missing="$missing STAGING_SSH_HOST"
+          [ -n "$KEY" ] || missing="$missing STAGING_SSH_KEY"
+          [ -n "$ENVFILE" ] || missing="$missing STAGING_ENV"
+          if [ -n "$missing" ]; then
+            echo "::notice::Secret belum terbaca:$missing — deploy dilewati. Isi di Settings → Secrets and variables → Actions → tab Secrets (Repository secrets atau environment 'staging')."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -49,8 +55,8 @@ jobs:
       - name: Prepare SSH
         if: steps.cfg.outputs.ready == 'true'
         env:
-          HOST: ${{ secrets.STAGING_SSH_HOST }}
-          PORT: ${{ secrets.STAGING_SSH_PORT }}
+          HOST: ${{ secrets.STAGING_SSH_HOST || vars.STAGING_SSH_HOST }}
+          PORT: ${{ secrets.STAGING_SSH_PORT || vars.STAGING_SSH_PORT }}
           KEY: ${{ secrets.STAGING_SSH_KEY }}
           KNOWN: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
         run: |
@@ -59,7 +65,7 @@ jobs:
           if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           else ssh-keyscan -p "${PORT:-22}" -T 15 "$HOST" > ~/.ssh/known_hosts; echo "::warning::STAGING_SSH_KNOWN_HOSTS belum diisi; host key dipercaya saat pertama terhubung."; fi
           printf 'Host staging\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' \
-            "$HOST" "${PORT:-22}" "${{ secrets.STAGING_SSH_USER || 'root' }}" > ~/.ssh/config
+            "$HOST" "${PORT:-22}" "${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER || 'root' }}" > ~/.ssh/config
           ssh staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"'
 
       - name: Upload configuration & deploy
