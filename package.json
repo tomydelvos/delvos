@@ -1,0 +1,25 @@
+{
+  "name": "delvos-law-office-agents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kantor virtual hukum: 3 agen AI (Administratif, Operasional, Keamanan) untuk penerimaan calon klien via email, chatbot, dan formulir registrasi.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "set-password": "node --disable-warning=ExperimentalWarning scripts/set-admin-password.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "express": "^5.2.1",
+    "imapflow": "^1.0.0",
+    "mailparser": "^3.9.0",
+    "multer": "^2.0.0",
+    "nodemailer": "^10.0.15"
+  }
+}

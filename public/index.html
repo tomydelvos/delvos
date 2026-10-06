@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Konsultasi Hukum</title>
+  <meta name="description" content="Layanan penerimaan klien: asisten virtual, formulir registrasi, dan status pendaftaran.">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/">
+        <img id="brand-logo" alt="" hidden>
+        <span>
+          <span class="brand-name" id="brand-name">Kantor Hukum</span>
+          <span class="brand-tagline" id="brand-tagline"></span>
+        </span>
+      </a>
+      <nav class="header-nav">
+        <a href="/" data-nav="chat">Asisten Virtual</a>
+        <a href="/daftar" data-nav="form">Registrasi</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap main">
+    <!-- Landing + chatbot -->
+    <section id="view-chat" class="view grid-2" hidden>
+      <div class="hero">
+        <p class="eyebrow">Penerimaan Klien</p>
+        <h1>Konsultasikan kebutuhan hukum Anda dengan tenang.</h1>
+        <p class="lead">Asisten virtual kami akan memandu Anda menyampaikan kebutuhan hukum secara terstruktur, sehingga tim advokat dapat menindaklanjutinya dengan tepat.</p>
+        <ol class="steps">
+          <li><strong>Sampaikan kebutuhan</strong><span>Melalui asisten virtual dan formulir registrasi singkat.</span></li>
+          <li><strong>Peninjauan tim</strong><span>Termasuk pemeriksaan benturan kepentingan secara rahasia.</span></li>
+          <li><strong>Konsultasi awal</strong><span>Kami menghubungi Anda dalam <b class="sla-hours">24</b> jam kerja.</span></li>
+        </ol>
+        <div class="trust">
+          <div><span class="icon">🔒</span> Data Anda dilindungi sesuai UU Pelindungan Data Pribadi.</div>
+          <div><span class="icon">🕘</span> Jam kerja: <span class="office-hours"></span></div>
+        </div>
+      </div>
+      <div class="chat-card" aria-live="polite">
+        <div class="chat-head">
+          <div class="avatar">⚖</div>
+          <div>
+            <div class="chat-title" id="bot-name">Asisten Virtual</div>
+            <div class="chat-sub"><span class="dot"></span> Online — balasan otomatis</div>
+          </div>
+          <button class="link-btn" id="chat-restart" type="button" title="Mulai ulang">↺ Mulai ulang</button>
+        </div>
+        <div class="chat-body" id="chat-body"></div>
+        <div class="chat-options" id="chat-options"></div>
+      </div>
+    </section>
+
+    <!-- Registration form -->
+    <section id="view-form" class="view" hidden>
+      <div class="form-card">
+        <div class="form-head">
+          <h1 id="form-title">Formulir Registrasi</h1>
+          <p id="form-intro" class="muted"></p>
+          <div id="ref-banner" class="notice" hidden></div>
+          <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
+          <ol class="stepper" id="stepper"></ol>
+        </div>
+        <form id="reg-form" novalidate>
+          <div id="form-steps"></div>
+          <div class="hp" aria-hidden="true">
+            <label>Jangan diisi <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <div class="form-error" id="form-error" role="alert" hidden></div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-prev">← Sebelumnya</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn primary" id="btn-next">Lanjut →</button>
+            <button type="submit" class="btn primary" id="btn-submit" hidden>Kirim Formulir</button>
+          </div>
+          <p class="disclaimer" id="form-disclaimer"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Success after submit -->
+    <section id="view-success" class="view" hidden>
+      <div class="form-card success">
+        <div class="success-icon">✓</div>
+        <h1>Terima kasih, registrasi Anda telah kami terima</h1>
+        <p class="muted" id="success-message"></p>
+        <div class="reg-box" id="reg-box" hidden>
+          <span class="muted small">Nomor registrasi Anda</span>
+          <strong id="reg-no"></strong>
+          <button class="link-btn" type="button" id="copy-reg">Salin nomor</button>
+        </div>
+        <div class="next-steps">
+          <h2>Langkah selanjutnya</h2>
+          <ol>
+            <li>Konfirmasi dan ringkasan isian telah dikirim ke email Anda.</li>
+            <li>Tim kami meninjau kebutuhan Anda dan melakukan pemeriksaan benturan kepentingan.</li>
+            <li>Kami akan menghubungi Anda paling lambat <b id="sla-due">dalam 24 jam kerja</b> untuk menjadwalkan konsultasi.</li>
+          </ol>
+        </div>
+        <div class="row-center">
+          <a class="btn primary" id="status-link" href="#" hidden>Pantau status pendaftaran</a>
+          <a class="btn ghost" href="/">Kembali ke beranda</a>
+        </div>
+        <p class="disclaimer">Jika perkara Anda memiliki tenggat waktu sangat dekat (misalnya sidang dalam 1–2 hari), mohon segera hubungi kami di <b class="firm-phone"></b>.</p>
+      </div>
+    </section>
+
+    <!-- Public status page -->
+    <section id="view-status" class="view" hidden>
+      <div class="form-card">
+        <h1>Status Pendaftaran</h1>
+        <div id="status-content"><p class="muted">Memuat…</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div><strong id="footer-name"></strong> · <span id="footer-address"></span></div>
+      <div class="muted small"><span id="footer-phone"></span> · <span id="footer-email"></span></div>
+      <div class="muted small">Informasi di situs ini bukan nasihat hukum. Hubungan advokat–klien terbentuk setelah perjanjian jasa hukum ditandatangani.</div>
+    </div>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>

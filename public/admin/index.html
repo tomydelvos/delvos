@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel Admin Kantor</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <div id="login-screen" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <div class="login-logo">⚖</div>
+      <h1>Panel Admin</h1>
+      <p class="muted">Kantor virtual — penerimaan calon klien</p>
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Kata sandi <input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="alert error" id="login-error" hidden></div>
+      <button class="btn primary block" type="submit">Masuk</button>
+    </form>
+  </div>
+
+  <div id="app" class="layout" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand"><span class="logo">⚖</span><span id="side-firm">Kantor Hukum</span></div>
+      <nav>
+        <div class="nav-group">Operasional</div>
+        <a href="#dashboard" data-route="dashboard">📊 Dasbor</a>
+        <a href="#inquiries" data-route="inquiries">📩 Email Masuk</a>
+        <a href="#submissions" data-route="submissions">🗂 Registrasi Klien</a>
+        <div class="nav-group">Konfigurasi</div>
+        <a href="#form" data-route="form">📝 Formulir Registrasi</a>
+        <a href="#chatbot" data-route="chatbot">💬 Alur Chatbot</a>
+        <a href="#templates" data-route="templates">✉️ Template Pesan</a>
+        <a href="#settings" data-route="settings">🏢 Profil Kantor</a>
+        <div class="nav-group">Keamanan & Sistem</div>
+        <a href="#parties" data-route="parties">⚖ Daftar Pihak (Konflik)</a>
+        <a href="#notifications" data-route="notifications">🔔 Log Notifikasi</a>
+        <a href="#audit" data-route="audit">🛡 Log Audit</a>
+        <a href="#tools" data-route="tools">🧪 Uji Coba</a>
+      </nav>
+      <div class="side-foot">
+        <span id="side-user"></span>
+        <button class="link" id="logout" type="button">Keluar</button>
+      </div>
+    </aside>
+    <main class="content">
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu">☰</button>
+      <div id="view"></div>
+    </main>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

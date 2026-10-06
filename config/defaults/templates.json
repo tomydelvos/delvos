@@ -1,0 +1,61 @@
+{
+  "email": {
+    "inquiry_autoreply": {
+      "subject": "Re: {{subject}} — Pesan Anda telah kami terima [{{ref}}]",
+      "body": "Yth. {{client_name}},\n\nTerima kasih telah menghubungi {{firm_name}}. Pesan Anda telah kami terima dengan nomor referensi {{ref}}.\n\n{{office_hours_note}}\n\nAgar tim kami dapat menilai kebutuhan hukum Anda secara tepat dan cepat, mohon lengkapi formulir registrasi singkat melalui tautan berikut (sekitar 5 menit):\n\n[button:Isi Formulir Registrasi|{{form_link}}]\n\nLangkah selanjutnya:\n- Anda melengkapi formulir registrasi.\n- Tim kami meninjau kebutuhan Anda dan melakukan pemeriksaan benturan kepentingan.\n- Kami menghubungi Anda dalam {{sla_hours}} jam kerja untuk menjadwalkan konsultasi.\n\nSeluruh informasi yang Anda sampaikan diperlakukan secara rahasia. Mohon tidak mengirimkan dokumen asli melalui email.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "inquiry_followup_ack": {
+      "subject": "Re: {{subject}} [{{reg_no}}]",
+      "body": "Yth. {{client_name}},\n\nTerima kasih atas pesan lanjutan Anda. Pesan ini telah kami teruskan kepada tim yang menangani pendaftaran Anda dengan nomor {{reg_no}}.\n\nStatus saat ini: {{status_label}}.\n\nAnda dapat memantau status pendaftaran kapan saja melalui tautan berikut:\n\n[button:Lihat Status Pendaftaran|{{status_link}}]\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "invite_reminder": {
+      "subject": "Pengingat: lengkapi formulir registrasi Anda [{{ref}}]",
+      "body": "Yth. {{client_name}},\n\nKami ingin memastikan kebutuhan hukum Anda dapat segera kami tindak lanjuti. Formulir registrasi untuk referensi {{ref}} belum kami terima.\n\n[button:Lengkapi Formulir|{{form_link}}]\n\nApabila Anda sudah tidak memerlukan bantuan kami, Anda dapat mengabaikan email ini. Kami tidak akan mengirimkan pengingat lagi.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "submission_client": {
+      "subject": "Konfirmasi Registrasi {{reg_no}} — {{firm_name}}",
+      "body": "Yth. {{client_name}},\n\nTerima kasih telah mempercayakan kebutuhan hukum Anda kepada {{firm_name}}. Formulir registrasi Anda telah kami terima pada {{submitted_at}} dengan nomor registrasi:\n\n[highlight:{{reg_no}}]\n\nRingkasan informasi yang Anda sampaikan:\n\n{{{summary_html}}}\n\nLangkah selanjutnya:\n- Tim kami meninjau kebutuhan Anda dan melakukan pemeriksaan benturan kepentingan.\n- Kami akan menghubungi Anda melalui {{preferred_contact}} dalam {{sla_hours}} jam kerja untuk menjadwalkan konsultasi.\n- Mohon siapkan dokumen pendukung yang relevan untuk dibawa saat konsultasi.\n\n[button:Pantau Status Pendaftaran|{{status_link}}]\n\nPenting: pendaftaran ini belum menimbulkan hubungan advokat–klien dan belum merupakan nasihat hukum. Apabila perkara Anda memiliki tenggat waktu yang sangat dekat, mohon segera hubungi kami di {{firm_phone}}.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "submission_team": {
+      "subject": "[{{urgency_tag}}] Registrasi baru {{reg_no}} — {{client_name}} ({{matter_type}})",
+      "body": "Registrasi calon klien baru telah masuk.\n\nNo. registrasi: {{reg_no}}\nNama: {{client_name}}\nBidang: {{matter_type}}\nUrgensi: {{urgency}}\nPemeriksaan konflik: {{conflict_text}}\nTarget respons: {{sla_due}}\n\n{{#ai_summary}}Ringkasan AI:\n{{ai_summary}}{{/ai_summary}}\n\n{{{summary_html}}}\n\n[button:Buka di Panel Admin|{{admin_link}}]"
+    },
+    "status_ditinjau": {
+      "subject": "Pendaftaran {{reg_no}} sedang ditinjau",
+      "body": "Yth. {{client_name}},\n\nKami informasikan bahwa pendaftaran Anda dengan nomor {{reg_no}} saat ini sedang ditinjau oleh tim kami.\n\n{{#custom_message}}{{custom_message}}{{/custom_message}}\n\nKami akan segera menghubungi Anda untuk langkah selanjutnya.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "status_perlu_info": {
+      "subject": "Mohon informasi tambahan untuk pendaftaran {{reg_no}}",
+      "body": "Yth. {{client_name}},\n\nTerima kasih atas kesabaran Anda. Untuk dapat menilai perkara Anda secara lebih tepat, kami memerlukan informasi atau dokumen tambahan berikut:\n\n{{custom_message}}\n\nAnda dapat membalas email ini dengan melampirkan informasi tersebut.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "status_dijadwalkan": {
+      "subject": "Jadwal konsultasi Anda — {{reg_no}}",
+      "body": "Yth. {{client_name}},\n\nDengan senang hati kami mengonfirmasi jadwal konsultasi awal Anda:\n\n{{custom_message}}\n\nMohon membawa atau menyiapkan dokumen pendukung yang relevan. Apabila Anda perlu mengubah jadwal, silakan balas email ini atau hubungi kami di {{firm_phone}}.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "status_diterima": {
+      "subject": "Selamat datang sebagai klien {{firm_name}} — {{reg_no}}",
+      "body": "Yth. {{client_name}},\n\nTerima kasih atas kepercayaan Anda. Kami dengan senang hati menyampaikan bahwa {{firm_name}} bersedia mendampingi Anda dalam perkara ini.\n\n{{#custom_message}}{{custom_message}}{{/custom_message}}\n\nTim kami akan mengirimkan perjanjian jasa hukum untuk ditinjau dan ditandatangani. Hubungan advokat–klien efektif setelah perjanjian tersebut ditandatangani kedua belah pihak.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "status_ditolak": {
+      "subject": "Tanggapan atas pendaftaran {{reg_no}}",
+      "body": "Yth. {{client_name}},\n\nTerima kasih telah menghubungi {{firm_name}}. Setelah meninjau informasi yang Anda sampaikan, dengan menyesal kami belum dapat mendampingi Anda dalam perkara ini.\n\n{{#custom_message}}{{custom_message}}{{/custom_message}}\n\nKeputusan ini bukan merupakan penilaian atas pokok perkara Anda. Karena perkara hukum dapat terikat tenggat waktu (misalnya daluwarsa atau batas waktu upaya hukum), kami menyarankan Anda segera berkonsultasi dengan advokat lain.\n\nKami mendoakan yang terbaik untuk penyelesaian perkara Anda.\n\nHormat kami,\n{{signature}}\n{{firm_name}}"
+    },
+    "sla_team": {
+      "subject": "[PERINGATAN SLA] {{reg_no}} belum ditinjau ({{age_hours}} jam)",
+      "body": "Registrasi {{reg_no}} atas nama {{client_name}} ({{matter_type}}, urgensi: {{urgency}}) belum ditinjau selama {{age_hours}} jam.\n\nMohon segera ditindaklanjuti agar komitmen respons kepada calon klien terpenuhi.\n\n[button:Buka di Panel Admin|{{admin_link}}]"
+    }
+  },
+  "whatsapp": {
+    "inquiry_team": "📩 *Email masuk baru* ({{ref}})\nDari: {{client_name}} <{{from_email}}>\nPerihal: {{subject}}\n{{#ai_category}}Kategori: {{ai_category}}\n{{/ai_category}}Keamanan: {{security_text}}\n\n{{snippet}}\n\nAuto-reply & tautan formulir: {{autoreply_text}}\nPanel: {{admin_link}}",
+    "submission_team": "🆕 *Registrasi baru* {{reg_no}}\nNama: {{client_name}}\nBidang: {{matter_type}}\nUrgensi: *{{urgency}}*\nKontak: {{client_phone}} / {{client_email}}\nKonflik: {{conflict_text}}\n\n{{description_snippet}}\n\nPanel: {{admin_link}}",
+    "submission_client": "Yth. {{client_name}}, terima kasih telah mendaftar di *{{firm_name}}*.\n\nNo. registrasi Anda: *{{reg_no}}*\nTim kami akan menghubungi Anda dalam {{sla_hours}} jam kerja untuk menjadwalkan konsultasi.\n\nPantau status: {{status_link}}\n\n_Pesan otomatis — mohon tidak membagikan informasi sensitif melalui WhatsApp._",
+    "status_client": "Yth. {{client_name}}, status pendaftaran *{{reg_no}}* kini: *{{status_label}}*.\nDetail telah kami kirimkan ke email Anda.\n\n— {{firm_name}}",
+    "sla_team": "⏰ *Peringatan SLA*: {{reg_no}} ({{client_name}}, urgensi {{urgency}}) belum ditinjau selama {{age_hours}} jam.\nPanel: {{admin_link}}"
+  },
+  "telegram": {
+    "inquiry_team": "📩 <b>Email masuk baru</b> ({{ref}})\n<b>Dari:</b> {{client_name}} &lt;{{from_email}}&gt;\n<b>Perihal:</b> {{subject}}\n{{#ai_category}}<b>Kategori:</b> {{ai_category}}\n{{/ai_category}}<b>Keamanan:</b> {{security_text}}\n\n<i>{{snippet}}</i>\n\n<b>Auto-reply:</b> {{autoreply_text}}\n{{admin_link}}",
+    "submission_team": "🆕 <b>Registrasi baru</b> {{reg_no}}\n<b>Nama:</b> {{client_name}}\n<b>Bidang:</b> {{matter_type}}\n<b>Urgensi:</b> {{urgency}}\n<b>Kontak:</b> {{client_phone}} / {{client_email}}\n<b>Konflik:</b> {{conflict_text}}\n{{#ai_summary}}\n<b>Ringkasan AI:</b> {{ai_summary}}\n{{/ai_summary}}\n<i>{{description_snippet}}</i>\n\n{{admin_link}}",
+    "sla_team": "⏰ <b>Peringatan SLA</b>: {{reg_no}} ({{client_name}}, urgensi {{urgency}}) belum ditinjau selama {{age_hours}} jam.\n{{admin_link}}",
+    "digest_team": "📊 <b>Ringkasan harian {{date}}</b>\nEmail masuk (24 jam): {{inquiries_24h}}\nRegistrasi baru (24 jam): {{submissions_24h}}\nMenunggu tinjauan: {{pending_review}}\nMelewati SLA: {{overdue}}\nNotifikasi gagal: {{failed_notifications}}"
+  }
+}

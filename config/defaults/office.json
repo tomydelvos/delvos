@@ -1,0 +1,22 @@
+{
+  "name": "Kantor Hukum Delvos & Rekan",
+  "tagline": "Advokat & Konsultan Hukum",
+  "address": "Jl. Contoh No. 1, Jakarta",
+  "phone": "+62 21 0000 0000",
+  "whatsapp": "6281200000000",
+  "email": "intake@contoh-kantorhukum.id",
+  "website": "https://contoh-kantorhukum.id",
+  "brandColor": "#1f3a5f",
+  "accentColor": "#b8912f",
+  "logoUrl": "",
+  "signature": "Tim Penerimaan Klien",
+  "officeHours": {
+    "days": [1, 2, 3, 4, 5],
+    "start": "09:00",
+    "end": "17:00",
+    "label": "Senin – Jumat, 09.00 – 17.00 WIB"
+  },
+  "slaHours": 24,
+  "inviteReminderHours": 48,
+  "dailyDigestHour": 8
+}

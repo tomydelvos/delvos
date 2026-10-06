@@ -1,0 +1,69 @@
+{
+  "title": "Formulir Registrasi Calon Klien",
+  "intro": "Mohon lengkapi formulir berikut agar tim kami dapat memahami kebutuhan hukum Anda sebelum konsultasi. Seluruh informasi diperlakukan secara rahasia.",
+  "submitLabel": "Kirim Formulir",
+  "successMessage": "Terima kasih. Formulir Anda telah kami terima dan akan ditinjau oleh tim kami.",
+  "disclaimer": "Pengisian formulir ini belum menimbulkan hubungan advokat–klien. Hubungan tersebut baru terbentuk setelah adanya perjanjian jasa hukum tertulis yang ditandatangani kedua belah pihak.",
+  "sections": [
+    {
+      "id": "pemohon",
+      "title": "Data Pemohon",
+      "description": "Identitas pihak yang membutuhkan layanan hukum.",
+      "fields": [
+        { "id": "client_type", "type": "radio", "label": "Anda mendaftar sebagai", "required": true, "options": ["Perorangan", "Badan Usaha / Organisasi"] },
+        { "id": "full_name", "type": "text", "label": "Nama lengkap (sesuai KTP)", "required": true, "maxLength": 120, "role": "client_name" },
+        { "id": "company_name", "type": "text", "label": "Nama badan usaha / organisasi", "required": true, "maxLength": 160, "showIf": { "field": "client_type", "equals": "Badan Usaha / Organisasi" } },
+        { "id": "position", "type": "text", "label": "Jabatan Anda", "required": false, "maxLength": 80, "showIf": { "field": "client_type", "equals": "Badan Usaha / Organisasi" } },
+        { "id": "email", "type": "email", "label": "Alamat email", "required": true, "role": "client_email" },
+        { "id": "phone", "type": "tel", "label": "Nomor WhatsApp", "required": true, "placeholder": "08xxxxxxxxxx", "help": "Kami akan mengirimkan konfirmasi melalui nomor ini.", "role": "client_phone" },
+        { "id": "city", "type": "text", "label": "Kota domisili", "required": true, "maxLength": 80 },
+        { "id": "preferred_contact", "type": "radio", "label": "Cara dihubungi yang Anda pilih", "required": true, "options": ["WhatsApp", "Telepon", "Email"] }
+      ]
+    },
+    {
+      "id": "kebutuhan",
+      "title": "Kebutuhan Hukum",
+      "description": "Gambaran singkat permasalahan dan layanan yang Anda butuhkan.",
+      "fields": [
+        { "id": "matter_type", "type": "select", "label": "Bidang hukum", "required": true, "role": "matter_type", "options": ["Perdata & Kontrak", "Bisnis & Korporasi", "Ketenagakerjaan", "Pidana", "Keluarga & Waris", "Properti & Pertanahan", "Kepailitan & PKPU", "Hak Kekayaan Intelektual", "Perizinan & Regulasi", "Lainnya / Belum yakin"] },
+        { "id": "services", "type": "checkboxes", "label": "Layanan yang dibutuhkan", "required": true, "options": ["Konsultasi hukum", "Pendampingan / litigasi di pengadilan", "Penyusunan atau review kontrak", "Somasi / negosiasi", "Legal due diligence", "Pendampingan di kepolisian / kejaksaan", "Lainnya"] },
+        { "id": "description", "type": "textarea", "label": "Ceritakan singkat permasalahan Anda", "required": true, "minLength": 30, "maxLength": 5000, "help": "Kronologi singkat: apa yang terjadi, kapan, dan siapa saja yang terlibat.", "role": "description" },
+        { "id": "desired_outcome", "type": "textarea", "label": "Hasil yang Anda harapkan", "required": false, "maxLength": 2000 },
+        { "id": "case_stage", "type": "select", "label": "Tahap permasalahan saat ini", "required": true, "options": ["Belum ada proses hukum", "Sudah ada somasi / teguran", "Sedang proses di kepolisian / kejaksaan", "Sedang proses di pengadilan", "Sudah ada putusan", "Lainnya"] },
+        { "id": "urgency", "type": "radio", "label": "Tingkat urgensi", "required": true, "role": "urgency", "options": ["Mendesak (kurang dari 3 hari)", "Segera (1–2 minggu)", "Normal"] },
+        { "id": "deadline", "type": "date", "label": "Tenggat waktu terdekat (jika ada)", "required": false, "help": "Misalnya jadwal sidang, batas jawaban somasi, atau batas pemeriksaan." }
+      ]
+    },
+    {
+      "id": "pihak",
+      "title": "Pihak Terkait",
+      "description": "Diperlukan untuk pemeriksaan benturan kepentingan (conflict check) sesuai Kode Etik Advokat.",
+      "fields": [
+        { "id": "opposing_party", "type": "textarea", "label": "Nama pihak lawan / pihak terkait", "required": false, "maxLength": 1000, "placeholder": "Pisahkan dengan koma, contoh: PT Maju Jaya, Budi Santoso", "role": "opposing_party" },
+        { "id": "previous_lawyer", "type": "radio", "label": "Apakah perkara ini pernah/sedang ditangani advokat lain?", "required": true, "options": ["Belum pernah", "Ya, masih didampingi", "Ya, sudah tidak lagi"] }
+      ]
+    },
+    {
+      "id": "jadwal",
+      "title": "Jadwal Konsultasi & Dokumen",
+      "description": "",
+      "fields": [
+        { "id": "consult_mode", "type": "radio", "label": "Bentuk konsultasi yang diinginkan", "required": true, "options": ["Tatap muka di kantor", "Online (video call)", "Telepon"] },
+        { "id": "preferred_date", "type": "date", "label": "Tanggal konsultasi yang diinginkan", "required": false },
+        { "id": "preferred_time", "type": "select", "label": "Waktu yang diinginkan", "required": false, "options": ["Pagi (09.00 – 12.00)", "Siang (13.00 – 15.00)", "Sore (15.00 – 17.00)"] },
+        { "id": "documents", "type": "file", "label": "Dokumen pendukung (opsional)", "required": false, "multiple": true, "accept": ".pdf,.jpg,.jpeg,.png,.docx", "help": "PDF, JPG, PNG, atau DOCX. Maksimal 5 berkas, masing-masing 10 MB." },
+        { "id": "referral", "type": "select", "label": "Dari mana Anda mengetahui kami?", "required": false, "options": ["Pencarian Google", "Rekomendasi kenalan / klien", "Media sosial", "Artikel / media", "Lainnya"] }
+      ]
+    },
+    {
+      "id": "persetujuan",
+      "title": "Persetujuan",
+      "description": "",
+      "fields": [
+        { "id": "consent_privacy", "type": "checkbox", "label": "Saya menyetujui pengumpulan dan pemrosesan data pribadi saya untuk keperluan penilaian layanan hukum, sesuai UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi.", "required": true },
+        { "id": "consent_relationship", "type": "checkbox", "label": "Saya memahami bahwa pengisian formulir ini belum menimbulkan hubungan advokat–klien dan belum merupakan nasihat hukum.", "required": true },
+        { "id": "consent_truth", "type": "checkbox", "label": "Saya menyatakan bahwa informasi yang saya berikan adalah benar.", "required": true }
+      ]
+    }
+  ]
+}

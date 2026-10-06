@@ -1,0 +1,71 @@
+{
+  "botName": "Asisten Virtual",
+  "start": "welcome",
+  "nodes": {
+    "welcome": {
+      "messages": [
+        "Selamat datang di {{firm_name}}. Saya asisten virtual yang akan membantu Anda terhubung dengan tim kami.",
+        "Apa yang dapat kami bantu hari ini?"
+      ],
+      "options": [
+        { "label": "Saya ingin berkonsultasi tentang masalah hukum", "next": "new_case" },
+        { "label": "Layanan apa saja yang tersedia?", "next": "services" },
+        { "label": "Bagaimana proses dan biayanya?", "next": "process" },
+        { "label": "Cek status pendaftaran saya", "action": "check_status" },
+        { "label": "Hubungi staf kami", "next": "contact" }
+      ]
+    },
+    "new_case": {
+      "messages": [
+        "Baik. Agar tim kami dapat menilai perkara Anda dengan tepat, mohon isi formulir registrasi singkat (sekitar 5 menit).",
+        "Informasi yang Anda berikan bersifat rahasia dan hanya digunakan untuk keperluan penilaian layanan hukum."
+      ],
+      "options": [
+        { "label": "Isi formulir sekarang", "action": "open_form" },
+        { "label": "Apa saja yang perlu disiapkan?", "next": "prepare" },
+        { "label": "Kembali ke menu", "next": "welcome" }
+      ]
+    },
+    "prepare": {
+      "messages": [
+        "Sebaiknya siapkan hal-hal berikut:\n• Identitas diri / data perusahaan\n• Kronologi singkat permasalahan\n• Nama pihak lawan atau pihak terkait\n• Dokumen pendukung (kontrak, surat, bukti) bila ada\n• Tenggat waktu penting, misalnya jadwal sidang",
+        "Dokumen bersifat opsional dan dapat menyusul setelah konsultasi."
+      ],
+      "options": [
+        { "label": "Isi formulir sekarang", "action": "open_form" },
+        { "label": "Kembali ke menu", "next": "welcome" }
+      ]
+    },
+    "services": {
+      "messages": [
+        "Kami menangani antara lain:\n• Perdata & kontrak\n• Bisnis & korporasi\n• Ketenagakerjaan\n• Pidana\n• Keluarga & waris\n• Properti & pertanahan\n• Kepailitan & PKPU\n• Hak kekayaan intelektual\n• Perizinan & regulasi",
+        "Layanan meliputi konsultasi, penyusunan & review kontrak, somasi dan negosiasi, legal due diligence, hingga pendampingan litigasi."
+      ],
+      "options": [
+        { "label": "Konsultasikan masalah saya", "next": "new_case" },
+        { "label": "Kembali ke menu", "next": "welcome" }
+      ]
+    },
+    "process": {
+      "messages": [
+        "Prosesnya sebagai berikut:\n1. Anda mengisi formulir registrasi.\n2. Tim kami meninjau kebutuhan Anda dan melakukan pemeriksaan benturan kepentingan.\n3. Kami menghubungi Anda dalam {{sla_hours}} jam kerja untuk menjadwalkan konsultasi.\n4. Setelah konsultasi awal, kami menyampaikan proposal jasa hukum beserta biayanya.\n5. Kerja sama dimulai setelah perjanjian jasa hukum ditandatangani.",
+        "Biaya bergantung pada jenis dan kompleksitas perkara, dan akan disampaikan secara transparan sebelum kerja sama dimulai."
+      ],
+      "options": [
+        { "label": "Mulai isi formulir", "action": "open_form" },
+        { "label": "Kembali ke menu", "next": "welcome" }
+      ]
+    },
+    "contact": {
+      "messages": [
+        "Tim kami siap membantu pada jam kerja: {{office_hours}}.",
+        "Agar staf kami dapat langsung menindaklanjuti, kami sarankan mengisi formulir terlebih dahulu. Anda juga dapat menghubungi kami melalui WhatsApp."
+      ],
+      "options": [
+        { "label": "Isi formulir", "action": "open_form" },
+        { "label": "Chat WhatsApp kantor", "action": "whatsapp" },
+        { "label": "Kembali ke menu", "next": "welcome" }
+      ]
+    }
+  }
+}
