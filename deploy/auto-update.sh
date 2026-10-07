@@ -14,6 +14,17 @@ git -C "$DIR" fetch -q origin "$BRANCH"
 remote=$(git -C "$DIR" rev-parse "origin/$BRANCH")
 [ "$remote" = "$(cat "$STATE/deployed" 2>/dev/null || true)" ] && exit 0
 
+# Deploy only commits whose CI "test" job passed (public check-runs API, no token needed).
+slug=$(git -C "$DIR" remote get-url origin | sed -E 's#^(https://|git@)github.com[/:]##; s#\.git$##')
+ci=$(curl -fsS -m 20 -H 'Accept: application/vnd.github+json' \
+  "https://api.github.com/repos/$slug/commits/$remote/check-runs?check_name=test" 2>/dev/null |
+  grep -o '"conclusion": *"[a-z_]*"' | head -1 | sed -E 's/.*"([a-z_]*)"$/\1/' || true)
+case "$ci" in
+  success) ;;
+  "") exit 0 ;;   # CI still running (or API unreachable): try again on the next tick
+  *) [ "$remote" = "$(cat "$STATE/rejected" 2>/dev/null || true)" ] || { echo "$remote" > "$STATE/rejected"; echo "Revisi ${remote:0:7} tidak di-deploy: CI $ci"; }; exit 0 ;;
+esac
+
 # A revision that failed is retried at most every 30 minutes instead of rebuilding on every tick.
 if [ "$remote" = "$(cat "$STATE/failed" 2>/dev/null || true)" ] && [ -z "$(find "$STATE/failed" -mmin +30 2>/dev/null)" ]; then exit 0; fi
 

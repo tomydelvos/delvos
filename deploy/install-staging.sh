@@ -67,10 +67,12 @@ finalize_env() {
 PASTED=""
 if [ ! -f staging.env ] && [ -z "${ENV_SOURCE:-}" ] && [ "$(ask "Sudah punya isi STAGING_ENV (yang juga diisi di GitHub Secrets) untuk ditempel? (y/n)" n)" = y ]; then
   echo "Tempel isinya, lalu ketik END di baris tersendiri dan tekan Enter:"
-  exec 8</dev/tty; umask 077; : > staging.env
-  while IFS= read -r line <&8; do [ "$line" = END ] && break; printf '%s\n' "$line" >> staging.env; done
+  # Read into a temp file so an interrupted paste never leaves a partial staging.env behind.
+  exec 8</dev/tty; umask 077; tmp=$(mktemp staging.env.XXXXXX); trap 'rm -f "$tmp"' EXIT
+  while IFS= read -r line <&8; do [ "$line" = END ] && break; printf '%s\n' "$line" >> "$tmp"; done
   umask 022; exec 8<&-
-  grep -q '^STAGING_DOMAIN=' staging.env || { rm -f staging.env; echo "STAGING_DOMAIN tidak ditemukan pada isi yang ditempel."; exit 1; }
+  grep -q '^STAGING_DOMAIN=' "$tmp" || { echo "STAGING_DOMAIN tidak ditemukan pada isi yang ditempel."; exit 1; }
+  mv "$tmp" staging.env
   PASTED=1
 fi
 

@@ -63,7 +63,7 @@ Saat ditanya, pilih **y** untuk menempel isi `STAGING_ENV` yang sama dengan di G
 - Kode diambil dari repositori publik lewat koneksi **keluar**; tidak ada kode dari GitHub Actions yang dijalankan di VPS.
 - Konfigurasi ada di `/opt/kantor/deploy/staging.env` (VPS). Mengubah `STAGING_ENV` di GitHub tidak berpengaruh pada jalur pull; ubah file di VPS lalu jalankan `sudo bash /opt/kantor/deploy/install-staging.sh`.
 - Log: `journalctl -u kantor-auto-update -n 100`. Matikan: `systemctl disable --now kantor-auto-update.timer`.
-- Revisi yang gagal dicoba ulang paling cepat 30 menit kemudian.
+- Hanya commit yang lulus CI (job `test`) yang di-deploy. Revisi yang gagal dicoba ulang paling cepat 30 menit kemudian.
 
 ### Cek SSH dari komputer Anda (opsional)
 Ganti `IP_VPS` dengan **IP publik VPS Anda** dari dashboard penyedia (bukan IP contoh), dan pakai path lengkap file kunci:

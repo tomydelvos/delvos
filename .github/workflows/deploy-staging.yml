@@ -164,14 +164,11 @@ jobs:
           ssh staging "sudo ENV_SOURCE=/root/kantor-staging.env BRANCH='${GITHUB_REF_NAME}' bash /root/install-staging.sh </dev/null"
           ssh staging "cd /opt/kantor && echo \"Revisi di server: \$(git rev-parse --short HEAD) (diharapkan ${SHA::7})\""
 
-      # Container state and error lines only: full app logs can contain client data and first-run passwords,
-      # and this repository's Actions logs are public.
+      # Container state only: app logs contain client data and first-run passwords, and this repository's
+      # Actions logs are public. Read logs on the VPS: docker compose ... logs app caddy
       - name: Container status
         if: always()
-        run: |
-          ssh -o BatchMode=yes staging 'cd /opt/kantor/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env ps &&
-            docker compose -f docker-compose.staging.yml --env-file staging.env logs --tail=200 app caddy 2>&1 |
-            grep -iE "error|fatal|fail|exception|refused" | grep -viE "password|sandi|token|secret|@" | tail -20' || true
+        run: ssh -o BatchMode=yes staging 'cd /opt/kantor/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env ps' || true
 
   verify:
     needs: [plan, deploy-ssh]
@@ -190,22 +187,21 @@ jobs:
         run: |
           DOMAIN=$(printf '%s\n' "$ENVFILE" | grep -E '^STAGING_DOMAIN=' | head -1 | cut -d= -f2- | tr -d "'\"\r ")
           # Pull deploys rebuild on the VPS (timer every 2 min + build); SSH deploys are already done.
-          [ "$VIA" = pull ] && tries=100 || tries=24
-          seen=""
-          for i in $(seq 1 "$tries"); do
+          [ "$VIA" = pull ] && limit=22 || limit=6   # minutes; below the job timeout so the diagnosis prints
+          deadline=$((SECONDS + limit * 60)); seen=""; i=0
+          while [ "$SECONDS" -lt "$deadline" ]; do i=$((i + 1))
             rev=$(curl -fsS -m 10 "https://$DOMAIN/healthz" 2>/dev/null | jq -r '.revision // empty' 2>/dev/null || true)
             [ -n "$rev" ] && seen=yes
-            # Accept this run's commit or a newer tip of the branch (a later push may already be deployed).
+            case "$SHA" in "$rev"*) [ -n "$rev" ] && { echo "Revisi yang berjalan: $rev ✓"; exit 0; };; esac
+            # A newer push supersedes this run; that run verifies its own commit.
             tip=$(git ls-remote -q "https://github.com/$GITHUB_REPOSITORY" "refs/heads/$GITHUB_REF_NAME" | cut -c1-40)
-            if [ -n "$rev" ] && { case "$SHA" in "$rev"*) true;; *) false;; esac || case "$tip" in "$rev"*) true;; *) false;; esac; }; then
-              echo "Revisi yang berjalan: $rev ✓"; exit 0
-            fi
-            echo "menunggu… ($i/$tries) revisi sekarang: ${rev:-tidak terjangkau}"; sleep 15
+            if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then echo "::notice::Branch sudah maju ke ${tip::7}; verifikasi diserahkan ke run berikutnya."; exit 0; fi
+            echo "menunggu… ($i) revisi sekarang: ${rev:-tidak terjangkau}"; sleep 15
           done
           if [ -z "$seen" ]; then
             echo "::error::https://$DOMAIN/healthz tidak terjangkau dari internet. Periksa record A domain → IP publik VPS dan port 80/443 di firewall penyedia (dibutuhkan Let's Encrypt & webhook Meta)."
           elif [ "$VIA" = pull ]; then
-            echo "::error::VPS belum men-deploy ${SHA::7}. Pastikan auto-update terpasang (installer di VPS) dan lihat log di VPS: journalctl -u kantor-auto-update -n 100"
+            echo "::error::VPS belum men-deploy ${SHA::7}. Pastikan auto-update terpasang (installer di VPS) dan CI commit ini lulus; lihat log di VPS: journalctl -u kantor-auto-update -n 100"
           else
             echo "::error::Revisi yang berjalan tidak sama dengan ${SHA::7} — kontainer lama masih berjalan atau domain mengarah ke server lain."
           fi
