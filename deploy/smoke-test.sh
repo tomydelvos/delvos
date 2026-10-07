@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cek cepat setelah deploy.  Pemakaian: ./smoke-test.sh https://staging.kantoranda.id penguji 'sandi-penguji' [verify-token]
+# Cek cepat setelah deploy.  Pemakaian: ./smoke-test.sh https://staging.kantorbhaga.id penguji 'sandi-penguji' [verify-token]
 set -euo pipefail
 URL="${1:?URL staging}"; USER="${2:?user basic auth}"; PASS="${3:?sandi basic auth}"; VERIFY="${4:-}"
 # SMOKE_INSECURE=1 hanya untuk uji lokal dengan sertifikat internal Caddy (domain localhost).

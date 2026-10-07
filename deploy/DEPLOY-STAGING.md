@@ -10,8 +10,8 @@ Staging adalah salinan sistem yang terhubung ke Gmail, WhatsApp, Telegram, dan A
 | Kebutuhan | Contoh |
 |---|---|
 | VPS Ubuntu 22.04/24.04, min. 1 vCPU / 1 GB RAM | Biznet Gio, IDCloudHost, DigitalOcean (SG) |
-| Subdomain yang diarahkan ke IP VPS (record **A**) | `staging.kantoranda.id` |
-| Kotak masuk Gmail **khusus staging** | `intake-staging@kantoranda.id` |
+| Subdomain yang diarahkan ke IP VPS (record **A**) | `staging.kantorbhaga.id` |
+| Kotak masuk Gmail **khusus staging** | `intake-staging@kantorbhaga.id` |
 | Nomor uji WhatsApp Cloud API (gratis dari Meta) atau nomor terpisah | — |
 | Grup Telegram uji coba + bot | — |
 | API key Anthropic | — |
@@ -126,11 +126,11 @@ Caddy otomatis mengambil sertifikat HTTPS Let's Encrypt (pastikan DNS sudah meng
 
 ### 4. Cek otomatis
 ```bash
-./smoke-test.sh https://staging.kantoranda.id penguji 'sandi-penguji' <WA_META_VERIFY_TOKEN>
+./smoke-test.sh https://staging.kantorbhaga.id penguji 'sandi-penguji' <WA_META_VERIFY_TOKEN>
 ```
 
 ### 5. Hubungkan webhook WhatsApp
-Meta → App → WhatsApp → Configuration → Callback URL `https://staging.kantoranda.id/webhooks/whatsapp`, Verify token = `WA_META_VERIFY_TOKEN`, langganan field **messages**.
+Meta → App → WhatsApp → Configuration → Callback URL `https://staging.kantorbhaga.id/webhooks/whatsapp`, Verify token = `WA_META_VERIFY_TOKEN`, langganan field **messages**.
 
 ### 6. Daftar uji (UAT)
 Masuk ke `https://<domain>/admin/` (sandi penguji, lalu akun admin). Jalankan skenario berikut:

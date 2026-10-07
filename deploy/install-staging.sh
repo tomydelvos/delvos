@@ -78,7 +78,7 @@ fi
 
 if [ ! -f staging.env ]; then
   say "3/6 Konfigurasi (kosongkan bila belum punya — kanal itu akan berjalan simulasi)"
-  DOMAIN=$(ask "Domain staging (sudah diarahkan ke IP server ini)" "staging.kantoranda.id")
+  DOMAIN=$(ask "Domain staging (sudah diarahkan ke IP server ini)" "staging.kantorbhaga.id")
   ACME=$(ask "Email untuk sertifikat HTTPS")
   TESTER=$(ask "Username penguji (pelindung situs)" "penguji")
   TESTER_PW=$(ask_secret "Sandi penguji (pelindung situs)")

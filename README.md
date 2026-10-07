@@ -68,16 +68,16 @@ npm test     # 17 skenario: alur email, registrasi, validasi, keamanan, konflik,
 Semua diisi di file `.env` (lihat `.env.example`). Setelah diisi, jalankan ulang server lalu uji tiap kanal dari **Panel Admin → Uji Coba → Tes kanal notifikasi**.
 
 ### 1. Gmail / Google Workspace (email masuk & keluar)
-1. Gunakan kotak masuk khusus, misalnya `intake@kantoranda.id`.
+1. Gunakan kotak masuk khusus, misalnya `intake@kantorbhaga.id`.
 2. Di akun Google tersebut: aktifkan **Verifikasi 2 Langkah**, lalu buat **App Password** di <https://myaccount.google.com/apppasswords>.
 3. Pastikan **IMAP aktif**: Gmail → Setelan → *Penerusan dan POP/IMAP* → Aktifkan IMAP.
 4. Isi `.env`:
    ```
    EMAIL_PROVIDER=gmail
-   GMAIL_USER=intake@kantoranda.id
+   GMAIL_USER=intake@kantorbhaga.id
    GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-   MAIL_FROM="Nama Kantor <intake@kantoranda.id>"
-   OFFICE_DOMAIN=kantoranda.id
+   MAIL_FROM="Nama Kantor <intake@kantorbhaga.id>"
+   OFFICE_DOMAIN=kantorbhaga.id
    ```
    Agen Operasional memeriksa inbox tiap 60 detik. Email yang sudah diproses ditandai *dibaca* (tetap ada di Gmail).
    Batas kirim Gmail ±500 email/hari (akun pribadi) atau ±2.000/hari (Workspace).

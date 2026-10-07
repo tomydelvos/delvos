@@ -9,7 +9,7 @@ const path = require('node:path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kantor-staging-'));
 Object.assign(process.env, {
   DATA_DIR: tmp, APP_ENV: 'staging', ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'kata-sandi-admin-123',
-  STAGING_ALLOWED_RECIPIENTS: '@kantoranda.id, 0811 2222 3333', WA_PROVIDER: 'log', TELEGRAM_CHAT_IDS: '-1001',
+  STAGING_ALLOWED_RECIPIENTS: '@kantorbhaga.id, 0811 2222 3333', WA_PROVIDER: 'log', TELEGRAM_CHAT_IDS: '-1001',
 });
 for (const k of ['SMTP_HOST', 'IMAP_HOST', 'TELEGRAM_BOT_TOKEN', 'AI_ENABLED', 'EMAIL_PROVIDER']) delete process.env[k];
 console.log = () => {};
@@ -26,7 +26,7 @@ test('staging memblokir penerima di luar daftar izin dan menandai pesan', async 
   db.prepare(`INSERT INTO users(username, name, email, whatsapp, role, password_hash) VALUES ('rina', 'Rina', 'rina@gmail.com', '0812-9999-0000', 'staf', 'x')`).run();
   const cases = [
     ['email', 'klien@gmail.com', 'blocked'],
-    ['email', 'Tester@KantorAnda.id', 'simulated'],
+    ['email', 'Tester@KantorBhaga.id', 'simulated'],
     ['email', 'rina@gmail.com', 'simulated'], // staff account
     ['whatsapp', '+62 811-2222-3333', 'simulated'],
     ['whatsapp', '081299990000', 'simulated'], // staff WhatsApp
