@@ -106,11 +106,34 @@ function validateOffice(o) {
 
 const validators = { form: validateForm, chatbot: validateChatbot, templates: validateTemplates, office: validateOffice };
 
+// Office values shipped as defaults by earlier versions. A stored value still equal to one of these was
+// never customised by an admin, so it follows the current default instead of pinning the old look/name.
+const RETIRED_OFFICE_DEFAULTS = {
+  name: ['Kantor Hukum Delvos & Rekan'],
+  email: ['intake@contoh-kantorhukum.id'],
+  website: ['https://contoh-kantorhukum.id'],
+  brandColor: ['#1f3a5f'],
+  accentColor: ['#b8912f'],
+};
+
+function upgradeOfficeDefaults() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'office'").get();
+  if (!row) return;
+  const value = json.parse(row.value);
+  const defaults = loadDefault('office');
+  let changed = false;
+  for (const [field, retired] of Object.entries(RETIRED_OFFICE_DEFAULTS)) {
+    if (retired.includes(value[field]) && value[field] !== defaults[field]) { value[field] = defaults[field]; changed = true; }
+  }
+  if (changed) set('office', value, 'system');
+}
+
 function ensureDefaults() {
   for (const key of KEYS) {
     const row = db.prepare('SELECT key FROM settings WHERE key = ?').get(key);
     if (!row) set(key, loadDefault(key), 'system');
   }
+  upgradeOfficeDefaults();
 }
 
 /** Templates added in newer versions appear automatically for offices that saved older template sets. */

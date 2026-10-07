@@ -216,3 +216,16 @@ test('API admin: wajib login, cegah CSRF, kunci setelah gagal berulang', async (
   }
   assert.equal(last.status, 429);
 });
+
+test('nilai bawaan kantor versi lama diperbarui, nilai yang diubah admin dipertahankan', () => {
+  const office = settings.get('office');
+  settings.set('office', { ...office, name: 'Kantor Hukum Delvos & Rekan', brandColor: '#1f3a5f', accentColor: '#123456' }, 'admin');
+  settings.ensureDefaults();
+  const after = settings.get('office');
+  assert.equal(after.name, settings.loadDefault('office').name);
+  assert.equal(after.brandColor, settings.loadDefault('office').brandColor);
+  assert.equal(after.accentColor, '#123456');
+  const version = settings.getRow('office').version;
+  settings.ensureDefaults(); // idempotent: nothing left to upgrade
+  assert.equal(settings.getRow('office').version, version);
+});
