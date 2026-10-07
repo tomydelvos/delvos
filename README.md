@@ -96,7 +96,7 @@ Semua diisi di file `.env` (lihat `.env.example`). Setelah diisi, jalankan ulang
 
      Pesan ini dikirim otomatis oleh sistem kantor kami.
      ```
-   - Contoh nilai: `{{1}}` = *Kantor Hukum Delvos & Rekan*, `{{2}}` = *Registrasi REG-2026-00001 telah kami terima. Tim kami akan menghubungi Anda dalam 24 jam kerja.*
+   - Contoh nilai: `{{1}}` = *Kantor Hukum Bhaga & Rekan*, `{{2}}` = *Registrasi REG-2026-00001 telah kami terima. Tim kami akan menghubungi Anda dalam 24 jam kerja.*
 5. **Webhook**: App → WhatsApp → Configuration. Isi Callback URL `https://domain-anda/webhooks/whatsapp`, Verify token = nilai `WA_META_VERIFY_TOKEN` (bebas Anda tentukan), lalu langganan field **messages**. Isi `WA_META_APP_SECRET` dari App Settings → Basic → App Secret.
 6. Isi `.env`: `WA_PROVIDER=meta` beserta nilai-nilai di atas.
 
