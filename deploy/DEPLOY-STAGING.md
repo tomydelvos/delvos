@@ -19,7 +19,16 @@ Staging adalah salinan sistem yang terhubung ke Gmail, WhatsApp, Telegram, dan A
 > Jangan memakai inbox Gmail produksi untuk staging: kedua sistem akan berebut membaca email klien yang sama.
 
 ## Deploy oleh Claude (via GitHub Actions) — direkomendasikan
-Claude tidak dapat membuka SSH langsung dari sesinya. Workflow `.github/workflows/deploy-staging.yml` di runner GitHub yang melakukan SSH ke VPS. Claude memicu workflow tersebut, membaca log, dan memperbaiki bila ada yang gagal. Setiap push ke branch juga otomatis men-deploy ulang.
+Claude tidak dapat membuka SSH langsung dari sesinya. Deploy dijalankan oleh workflow `.github/workflows/deploy-staging.yml`; Claude memicu workflow tersebut, membaca log, dan memperbaiki bila ada yang gagal. Setiap push ke branch juga otomatis men-deploy ulang.
+
+Ada dua jalur ke VPS, dan workflow memilih otomatis (`auto`):
+
+| Jalur | Cara kerja | Syarat |
+|---|---|---|
+| **ssh** | Runner GitHub masuk ke VPS lewat SSH | Port SSH VPS terbuka untuk internet |
+| **runner** | Runner kecil di VPS mengambil job dari GitHub lewat koneksi **keluar** (HTTPS) | Sekali jalankan `deploy/setup-runner.sh` di VPS; port SSH **tidak** perlu dibuka |
+
+Setiap run diawali **diagnosis jaringan** (lihat ringkasan run): IP privat, domain yang tidak mengarah ke VPS, `STAGING_SSH_KNOWN_HOSTS` yang tidak cocok, serta status port 22/80/443 dari internet. Bila SSH tidak terjangkau, deploy otomatis dialihkan ke jalur runner. Jalur bisa dipaksa lewat input *Run workflow* atau variable repositori `STAGING_DEPLOY_VIA` (`auto`/`ssh`/`runner`).
 
 **Persiapan sekali saja (±15 menit):**
 
@@ -40,6 +49,33 @@ Claude tidak dapat membuka SSH langsung dari sesinya. Workflow `.github/workflow
    | `STAGING_SSH_PORT` | bila SSH bukan port 22 (opsional) |
    | `STAGING_ENV` | isi lengkap `staging.env` berdasarkan `deploy/staging.env.example`. Pakai `STAGING_BASIC_AUTH_PASSWORD` (sandi biasa), bukan hash. `SESSION_SECRET` boleh dikosongkan. |
 5. Kabari Claude: "secrets sudah diisi". Claude akan menjalankan workflow, memantau log, dan melaporkan URL beserta hasil smoke test.
+
+> Pada jalur runner, hanya `STAGING_ENV` yang wajib; secret `STAGING_SSH_*` boleh dikosongkan.
+
+### Bila SSH dari GitHub tidak terjangkau: pasang runner di VPS
+Gejala: log berisi `ssh: connect to host *** port 22: Connection timed out`. Penyebab umumnya firewall/security group penyedia yang hanya mengizinkan IP Anda, IP yang salah/privat, atau SSH di port lain. Daripada membuka SSH ke seluruh internet, pasang runner:
+
+1. GitHub → repo → **Settings → Actions → Runners → New self-hosted runner** → pilih **Linux**. Salin nilai setelah `--token` (berlaku 1 jam, **jangan** kirim lewat chat).
+2. Buka terminal VPS (konsol web penyedia, atau SSH dari komputer Anda) sebagai root:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/tomydelvos/delvos/claude/law-office-ai-agent-c8ckgb/deploy/setup-runner.sh -o setup-runner.sh
+   sudo bash setup-runner.sh <TOKEN>
+   ```
+3. Pastikan runner **kantor-staging-…** berstatus *Idle* di halaman Runners, lalu kabari Claude.
+
+Pengaman runner:
+- Berjalan sebagai user `kantor-runner` tanpa sudo umum; satu-satunya perintah root yang diizinkan adalah `/usr/local/sbin/kantor-deploy` (deploy branch staging, status, log).
+- Skrip *job started* menolak semua job selain `deploy-staging.yml` dari push/dispatch di branch staging, sehingga pull request (termasuk dari fork) tidak bisa memakai runner ini.
+- Karena repositori publik, sebaiknya juga aktifkan **Settings → Actions → General → Fork pull request workflows → Require approval for all external contributors**.
+
+### Cek SSH dari komputer Anda (opsional)
+Ganti `IP_VPS` dengan **IP publik VPS Anda** dari dashboard penyedia (bukan IP contoh), dan pakai path lengkap file kunci:
+```bash
+nc -vz -G 5 IP_VPS 22                                   # macOS (Linux: nc -vz -w 5 IP_VPS 22)
+find ~ -name "deploy_staging*" 2>/dev/null              # cari file kunci
+ssh -i ~/deploy_staging -o IdentitiesOnly=yes root@IP_VPS "echo ok"
+```
+Bila dari komputer Anda berhasil tetapi dari GitHub timeout, firewall penyedia membatasi IP asal; gunakan jalur runner.
 
 Kunci privat dan kredensial hanya tersimpan terenkripsi di GitHub Secrets, tidak pernah lewat chat. Sandi penguji dalam bentuk teks biasa tidak disimpan di server (hanya hash-nya).
 

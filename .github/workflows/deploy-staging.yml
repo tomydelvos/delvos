@@ -1,17 +1,29 @@
 name: Deploy staging
 
-# Deploys the branch to the staging VPS over SSH, then smoke-tests it from the outside.
-# Required repository secrets (Settings → Secrets and variables → Actions):
-#   STAGING_SSH_HOST         VPS IP or hostname
-#   STAGING_SSH_USER         SSH user with sudo/root (e.g. root)
-#   STAGING_SSH_KEY          private key (ed25519) whose public key is in the VPS authorized_keys
-#   STAGING_ENV              full contents of deploy/staging.env (see deploy/staging.env.example)
-# Optional:
-#   STAGING_SSH_PORT         default 22
-#   STAGING_SSH_KNOWN_HOSTS  output of `ssh-keyscan <host>`; pins the host key (recommended)
+# Deploys the branch to the staging VPS, then smoke-tests it from the internet.
+# Two ways to reach the VPS:
+#   ssh    — this GitHub-hosted runner connects over SSH (the SSH port must be reachable from the internet).
+#   runner — a self-hosted runner on the VPS (deploy/setup-runner.sh) picks the job up over outbound HTTPS;
+#            no inbound SSH needed.
+# "auto" (default) probes the SSH port and falls back to the runner when it is unreachable.
+# Override with the dispatch input or the repository variable STAGING_DEPLOY_VIA (auto|ssh|runner).
+#
+# Secrets (Settings → Secrets and variables → Actions, repository or environment "staging"):
+#   STAGING_ENV              full contents of deploy/staging.env (see deploy/staging.env.example) — always required
+#   STAGING_SSH_HOST         public IP or hostname of the VPS          ┐
+#   STAGING_SSH_KEY          private key whose .pub is in authorized_keys ├ ssh mode only
+#   STAGING_SSH_USER         default root                              │
+#   STAGING_SSH_PORT         default 22                                │
+#   STAGING_SSH_KNOWN_HOSTS  output of `ssh-keyscan -p <port> <ip>`     ┘ (recommended)
 
 on:
   workflow_dispatch:
+    inputs:
+      via:
+        description: 'Jalur deploy (auto = SSH bila terjangkau, selain itu self-hosted runner)'
+        type: choice
+        options: [auto, ssh, runner]
+        default: auto
   push:
     branches: [claude/law-office-ai-agent-c8ckgb]
     paths-ignore: ['**.md']
@@ -21,11 +33,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     # Loads secrets defined on the "staging" environment in addition to repository secrets.
     environment: staging
+    outputs:
+      ready: ${{ steps.cfg.outputs.ready }}
+      via: ${{ steps.decide.outputs.via }}
     steps:
       - name: Check configuration
         id: cfg
@@ -40,61 +55,98 @@ jobs:
           echo "Secret yang terlihat oleh workflow: $(printf '%s' "$SECRET_NAMES" | jq -r 'keys | join(", ")')"
           echo "Variable yang terlihat oleh workflow: $(printf '%s' "$VAR_NAMES" | jq -r 'keys | join(", ")')"
           unset SECRET_NAMES
-          missing=""
-          [ -n "$HOST" ] || missing="$missing STAGING_SSH_HOST"
-          [ -n "$KEY" ] || missing="$missing STAGING_SSH_KEY"
-          [ -n "$ENVFILE" ] || missing="$missing STAGING_ENV"
-          if [ -n "$missing" ]; then
-            echo "::notice::Secret belum terbaca:$missing — deploy dilewati. Isi di Settings → Secrets and variables → Actions → tab Secrets (Repository secrets atau environment 'staging')."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          if [ -z "$ENVFILE" ]; then
+            echo "::notice::Secret STAGING_ENV belum terbaca — deploy dilewati. Isi di Settings → Secrets and variables → Actions → tab Secrets (Repository secrets atau environment 'staging')."
+            echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$HOST" ] && [ -n "$KEY" ]; then echo "has_ssh=true" >> "$GITHUB_OUTPUT"
+          else echo "has_ssh=false" >> "$GITHUB_OUTPUT"; echo "STAGING_SSH_HOST/STAGING_SSH_KEY belum lengkap — hanya mode runner yang tersedia."; fi
 
       - uses: actions/checkout@v4
         if: steps.cfg.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Test before deploying
         if: steps.cfg.outputs.ready == 'true'
         run: npm ci && npm test
 
-      - name: Prepare SSH
-        if: steps.cfg.outputs.ready == 'true'
+      - name: Diagnose network to the VPS
+        id: net
+        if: steps.cfg.outputs.ready == 'true' && steps.cfg.outputs.has_ssh == 'true'
         env:
           HOST: ${{ secrets.STAGING_SSH_HOST || vars.STAGING_SSH_HOST }}
           PORT: ${{ secrets.STAGING_SSH_PORT || vars.STAGING_SSH_PORT }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER }}
+          KNOWN: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          ENVFILE: ${{ secrets.STAGING_ENV }}
+        run: |
+          . deploy/ssh-target.sh
+          DOMAIN=$(printf '%s\n' "$ENVFILE" | grep -E '^STAGING_DOMAIN=' | head -1 | cut -d= -f2- | tr -d "'\"\r ")
+          known=""; if [ -n "$KNOWN" ]; then known=$(mktemp); printf '%s\n' "$KNOWN" | tr -d '\r' > "$known"; fi
+          bash deploy/diagnose-network.sh "$HOST" "$PORT" "$DOMAIN" "$known" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Choose deploy path
+        id: decide
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          REQUESTED: ${{ inputs.via || vars.STAGING_DEPLOY_VIA || 'auto' }}
+          HAS_SSH: ${{ steps.cfg.outputs.has_ssh }}
+          SSH_REACHABLE: ${{ steps.net.outputs.ssh_reachable }}
+        run: |
+          case "$REQUESTED" in
+            ssh)
+              [ "$HAS_SSH" = true ] || { echo "::error::Mode ssh dipilih tetapi STAGING_SSH_HOST/STAGING_SSH_KEY belum diisi."; exit 1; }
+              via=ssh ;;
+            runner) via=runner ;;
+            auto|"")
+              if [ "$SSH_REACHABLE" = true ]; then via=ssh
+              else
+                via=runner
+                msg="SSH ke VPS tidak terjangkau dari GitHub — deploy dialihkan ke self-hosted runner 'kantor-staging' di VPS. Bila runner belum terpasang, job 'deploy-runner' akan menunggu: pasang dengan deploy/setup-runner.sh (lihat deploy/DEPLOY-STAGING.md), atau perbaiki SSH sesuai temuan diagnosis lalu jalankan ulang."
+                echo "::notice::$msg"; printf '\n**%s**\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+              fi ;;
+            *) echo "::error::STAGING_DEPLOY_VIA harus auto, ssh, atau runner (sekarang: $REQUESTED)."; exit 1 ;;
+          esac
+          echo "Jalur deploy: $via"
+          echo "via=$via" >> "$GITHUB_OUTPUT"
+
+  deploy-ssh:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true' && needs.plan.outputs.via == 'ssh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        env:
+          HOST: ${{ secrets.STAGING_SSH_HOST || vars.STAGING_SSH_HOST }}
+          PORT: ${{ secrets.STAGING_SSH_PORT || vars.STAGING_SSH_PORT }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER }}
           KEY: ${{ secrets.STAGING_SSH_KEY }}
           KNOWN: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
-          SSH_USER: ${{ secrets.STAGING_SSH_USER || vars.STAGING_SSH_USER || 'root' }}
         run: |
-          # Tolerate copy-paste artefacts: surrounding whitespace/newlines, "user@host", "host:port".
-          trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | head -n1; }
-          HOST=$(trim "$HOST"); PORT=$(trim "$PORT"); SSH_USER=$(trim "$SSH_USER")
-          HOST="${HOST#ssh://}"; HOST="${HOST%/}"
-          case "$HOST" in *[[:space:]]*) second=$(printf '%s' "$HOST" | awk '{print $2}'); HOST=$(printf '%s' "$HOST" | awk '{print $1}')
-            printf '%s' "$second" | grep -Eq '^[0-9]+$' && PORT="${PORT:-$second}";; esac
-          case "$HOST" in *@*) SSH_USER="${HOST%@*}"; HOST="${HOST#*@}";; esac
-          case "$HOST" in *:*:*) ;; *:*) PORT="${PORT:-${HOST##*:}}"; HOST="${HOST%:*}";; esac
-          if ! printf '%s' "$HOST" | grep -Eq '^[A-Za-z0-9.:-]+$'; then
-            echo "::error::STAGING_SSH_HOST tidak valid. Isi hanya IP atau hostname VPS (tanpa spasi), mis. 103.10.20.30"; exit 1
-          fi
-          if [ -n "$PORT" ] && ! printf '%s' "$PORT" | grep -Eq '^[0-9]+$'; then
-            echo "::error::STAGING_SSH_PORT harus berupa angka."; exit 1
-          fi
+          . deploy/ssh-target.sh
           if ! printf '%s\n' "$KEY" | grep -q 'PRIVATE KEY-----'; then
             echo "::error::STAGING_SSH_KEY bukan kunci privat (harus diawali -----BEGIN OPENSSH PRIVATE KEY-----). Pastikan yang diisi file deploy_staging, bukan deploy_staging.pub."; exit 1
           fi
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
-          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
-          else ssh-keyscan -p "${PORT:-22}" -T 15 "$HOST" > ~/.ssh/known_hosts; echo "::warning::STAGING_SSH_KNOWN_HOSTS belum diisi; host key dipercaya saat pertama terhubung."; fi
-          printf 'Host staging\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ServerAliveInterval 30\n' \
-            "$HOST" "${PORT:-22}" "$SSH_USER" > ~/.ssh/config
-          ssh -o BatchMode=yes -o ConnectTimeout=20 staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"' || {
-            echo "::error::SSH ke VPS gagal. Periksa: kunci publik deploy_staging.pub sudah ada di ~/.ssh/authorized_keys user tersebut, port SSH terbuka, dan IP benar."; exit 1; }
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" | tr -d '\r' > ~/.ssh/known_hosts
+          else ssh-keyscan -p "$PORT" -T 15 "$HOST" > ~/.ssh/known_hosts; echo "::warning::STAGING_SSH_KNOWN_HOSTS belum diisi; host key dipercaya saat pertama terhubung."; fi
+          printf 'Host staging\n  HostName %s\n  Port %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  ConnectTimeout 20\n  ServerAliveInterval 30\n  ServerAliveCountMax 6\n' \
+            "$HOST" "$PORT" "$SSH_USER" > ~/.ssh/config
+          ssh -o BatchMode=yes staging 'echo "SSH OK: $(hostname) · $(. /etc/os-release && echo $PRETTY_NAME)"' || {
+            echo "::error::SSH ke VPS gagal. Periksa: kunci publik deploy_staging.pub sudah ada di ~/.ssh/authorized_keys user tersebut, port SSH terbuka, dan IP benar — atau pakai mode runner (deploy/setup-runner.sh)."; exit 1; }
 
       - name: Upload configuration & deploy
-        if: steps.cfg.outputs.ready == 'true'
         env:
           ENVFILE: ${{ secrets.STAGING_ENV }}
           SHA: ${{ github.sha }}
@@ -104,18 +156,68 @@ jobs:
           ssh staging "sudo ENV_SOURCE=/root/kantor-staging.env BRANCH='${GITHUB_REF_NAME}' bash /root/install-staging.sh </dev/null"
           ssh staging "cd /opt/kantor && echo \"Revisi di server: \$(git rev-parse --short HEAD) (diharapkan ${SHA::7})\""
 
-      - name: Smoke test from the internet
-        if: steps.cfg.outputs.ready == 'true'
+      - name: Recent application logs
+        if: always()
+        run: ssh -o BatchMode=yes staging 'cd /opt/kantor/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env logs --tail=60 app caddy' || true
+
+  deploy-runner:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true' && needs.plan.outputs.via == 'runner'
+    # Self-hosted runner installed by deploy/setup-runner.sh. It only accepts this workflow on this branch
+    # (job-started guard) and may only run /usr/local/sbin/kantor-deploy as root.
+    runs-on: [self-hosted, kantor-staging]
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - name: Deploy on the VPS
         env:
           ENVFILE: ${{ secrets.STAGING_ENV }}
+        run: printf '%s\n' "$ENVFILE" | sudo -n /usr/local/sbin/kantor-deploy deploy
+
+      - name: Local health check
+        env:
+          SHA: ${{ github.sha }}
         run: |
-          val() { printf '%s\n' "$ENVFILE" | grep -E "^$1=" | head -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'; }
-          DOMAIN=$(val STAGING_DOMAIN); USER=$(val STAGING_BASIC_AUTH_USER); PASS=$(val STAGING_BASIC_AUTH_PASSWORD); VERIFY=$(val WA_META_VERIFY_TOKEN)
-          echo "::add-mask::$PASS"
-          for i in $(seq 1 24); do curl -fsS "https://$DOMAIN/healthz" >/dev/null 2>&1 && break; echo "menunggu HTTPS… ($i)"; sleep 10; done
-          if [ -n "$PASS" ]; then bash deploy/smoke-test.sh "https://$DOMAIN" "$USER" "$PASS" "$VERIFY"
-          else curl -fsS "https://$DOMAIN/healthz"; echo; echo "::notice::STAGING_BASIC_AUTH_PASSWORD tidak ada di STAGING_ENV — smoke test lengkap dilewati."; fi
+          echo "Diharapkan: ${SHA::7}"
+          for i in $(seq 1 24); do sudo -n /usr/local/sbin/kantor-deploy status && exit 0; echo "menunggu aplikasi… ($i)"; sleep 5; done
+          echo "::error::Aplikasi tidak sehat setelah deploy (healthz lokal gagal). Lihat log di langkah berikut."; exit 1
 
       - name: Recent application logs
-        if: always() && steps.cfg.outputs.ready == 'true'
-        run: ssh staging 'cd /opt/kantor/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env logs --tail=60 app caddy' || true
+        if: always()
+        run: sudo -n /usr/local/sbin/kantor-deploy logs || true
+
+  smoke:
+    needs: [plan, deploy-ssh, deploy-runner]
+    if: always() && needs.plan.outputs.ready == 'true' && (needs.deploy-ssh.result == 'success' || needs.deploy-runner.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke test from the internet
+        env:
+          ENVFILE: ${{ secrets.STAGING_ENV }}
+          SHA: ${{ github.sha }}
+        run: |
+          val() { printf '%s\n' "$ENVFILE" | grep -E "^$1=" | head -1 | cut -d= -f2- | tr -d '\r' | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'; }
+          DOMAIN=$(val STAGING_DOMAIN); USER=$(val STAGING_BASIC_AUTH_USER); PASS=$(val STAGING_BASIC_AUTH_PASSWORD); VERIFY=$(val WA_META_VERIFY_TOKEN)
+          [ -n "$PASS" ] && echo "::add-mask::$PASS"
+          up=false
+          for i in $(seq 1 24); do curl -fsS -m 10 "https://$DOMAIN/healthz" >/dev/null 2>&1 && { up=true; break; }; echo "menunggu HTTPS… ($i)"; sleep 10; done
+          if [ "$up" != true ]; then
+            echo "::error::https://$DOMAIN/healthz tidak terjangkau dari internet. Periksa record A domain → IP publik VPS, dan port 80/443 terbuka di firewall penyedia (dibutuhkan Let's Encrypt & webhook Meta)."
+            curl -sS -m 10 -o /dev/null "https://$DOMAIN/healthz" || true
+            exit 1
+          fi
+          rev=$(curl -fsS -m 10 "https://$DOMAIN/healthz" | jq -r '.revision // empty')
+          case "$SHA" in "$rev"*) [ -n "$rev" ] && echo "Revisi yang berjalan: $rev ✓";; *) echo "::warning::Revisi yang berjalan ($rev) berbeda dari commit run ini (${SHA::7}); mungkin branch sudah maju.";; esac
+          [ -n "$rev" ] || echo "::warning::healthz belum melaporkan revisi."
+          if [ -n "$PASS" ]; then bash deploy/smoke-test.sh "https://$DOMAIN" "$USER" "$PASS" "$VERIFY"
+          else curl -fsS "https://$DOMAIN/healthz"; echo; echo "::notice::STAGING_BASIC_AUTH_PASSWORD tidak ada di STAGING_ENV — smoke test lengkap dilewati."; fi
+          {
+            echo "### Staging berjalan"
+            echo "- Situs: https://$DOMAIN"
+            echo "- Panel admin: https://$DOMAIN/admin/"
+            echo "- Webhook WhatsApp: https://$DOMAIN/webhooks/whatsapp"
+          } >> "$GITHUB_STEP_SUMMARY"

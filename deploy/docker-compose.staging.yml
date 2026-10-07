@@ -4,7 +4,10 @@ name: kantor-staging
 
 services:
   app:
-    build: ..
+    build:
+      context: ..
+      args:
+        GIT_SHA: ${GIT_SHA:-}
     restart: unless-stopped
     env_file: staging.env
     environment:

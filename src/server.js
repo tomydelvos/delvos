@@ -20,7 +20,7 @@ function createApp() {
   app.get('/healthz', (req, res) => {
     let dbOk = true;
     try { require('./db').db.prepare('SELECT 1').get(); } catch { dbOk = false; }
-    res.status(dbOk ? 200 : 503).json({ ok: dbOk, env: config.appEnv, version: require('../package.json').version, uptime: Math.round(process.uptime()) });
+    res.status(dbOk ? 200 : 503).json({ ok: dbOk, env: config.appEnv, version: require('../package.json').version, revision: process.env.GIT_SHA || null, uptime: Math.round(process.uptime()) });
   });
 
   app.use('/api/public', express.json({ limit: '50kb' }), require('./routes/public'));

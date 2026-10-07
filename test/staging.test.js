@@ -48,6 +48,7 @@ test('healthz melaporkan lingkungan staging', async () => {
   const res = await fetch(`http://127.0.0.1:${server.address().port}/healthz`);
   const body = await res.json();
   assert.equal(body.env, 'staging');
+  assert.equal(body.revision, process.env.GIT_SHA || null); // set from the image build arg in deployments
   assert.equal(res.headers.get('x-robots-tag'), 'noindex, nofollow');
   server.close();
 });

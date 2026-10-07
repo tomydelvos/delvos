@@ -1,0 +1,3 @@
+self-hosted-runner:
+  # Label of the staging VPS runner installed by deploy/setup-runner.sh.
+  labels: [kantor-staging]

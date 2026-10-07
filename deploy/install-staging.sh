@@ -26,9 +26,11 @@ ask_secret() { local v; read -r -s -p "$1: " v </dev/tty; echo >&2; echo "$v"; }
 say "1/6 Memasang Docker, git, dan firewall"
 if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | sh; fi
 apt-get update -qq && apt-get install -y -qq git curl ufw openssl >/dev/null
-# Keep the SSH port we are connected through open, even if it is not 22, before enabling the firewall.
-SSH_PORT="${SSH_PORT:-$(echo "${SSH_CONNECTION:-}" | awk '{print $4}')}"
-ufw allow "${SSH_PORT:-22}/tcp" >/dev/null && ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
+# Keep every port sshd listens on open (plus the one we are connected through), even if it is not 22,
+# before enabling the firewall — the installer may run from a GitHub runner without an SSH session.
+SSH_PORTS="${SSH_PORT:-} $(echo "${SSH_CONNECTION:-}" | awk '{print $4}') $(ss -Htlnp 2>/dev/null | awk '/"sshd"/ {n=split($4,a,":"); print a[n]}' || true) $(sshd -T 2>/dev/null | awk '$1=="port" {print $2}' || true)"
+for p in $SSH_PORTS 22; do case "$p" in ''|*[!0-9]*) ;; *) ufw allow "$p/tcp" >/dev/null;; esac; done
+ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
 
 say "2/6 Mengambil kode"
 if [ -d "$DIR/.git" ]; then git -C "$DIR" fetch -q origin "$BRANCH" && git -C "$DIR" checkout -q "$BRANCH" && git -C "$DIR" pull -q --ff-only origin "$BRANCH"
@@ -119,6 +121,8 @@ fi
 finalize_env
 
 say "4/6 Membangun & menjalankan (beberapa menit pada kali pertama)"
+# Baked into the image and reported by /healthz so a deploy can be verified from outside.
+export GIT_SHA; GIT_SHA=$(git -C "$DIR" rev-parse --short HEAD)
 docker compose -f docker-compose.staging.yml --env-file staging.env up -d --build
 
 say "5/6 Menunggu aplikasi & sertifikat HTTPS"
