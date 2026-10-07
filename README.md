@@ -143,7 +143,7 @@ Semua bisa diedit admin di panel; setiap simpan menjadi **versi baru** (bisa dik
 
 ## Staging
 
-Panduan lengkap: [`deploy/DEPLOY-STAGING.md`](deploy/DEPLOY-STAGING.md). Docker + Caddy (HTTPS otomatis), situs dilindungi sandi, dan **pengaman pengiriman**: di `APP_ENV=staging` pesan hanya terkirim ke staf, grup Telegram, dan `STAGING_ALLOWED_RECIPIENTS`. Pesan lainnya tercatat sebagai *blocked*. Deploy bisa dijalankan otomatis oleh GitHub Actions (`deploy-staging.yml`, lewat SSH atau self-hosted runner `deploy/setup-runner.sh` bila SSH tidak terjangkau) atau dengan installer satu perintah `deploy/install-staging.sh`. Ada juga skrip `deploy/smoke-test.sh`, cadangan (`scripts/backup.js`), dan daftar uji UAT.
+Panduan lengkap: [`deploy/DEPLOY-STAGING.md`](deploy/DEPLOY-STAGING.md). Docker + Caddy (HTTPS otomatis), situs dilindungi sandi, dan **pengaman pengiriman**: di `APP_ENV=staging` pesan hanya terkirim ke staf, grup Telegram, dan `STAGING_ALLOWED_RECIPIENTS`. Pesan lainnya tercatat sebagai *blocked*. Deploy bisa dijalankan otomatis oleh GitHub Actions (`deploy-staging.yml`, lewat SSH, atau auto-update di VPS bila SSH tidak terjangkau) atau dengan installer satu perintah `deploy/install-staging.sh`. Ada juga skrip `deploy/smoke-test.sh`, cadangan (`scripts/backup.js`), dan daftar uji UAT.
 
 ## Produksi
 

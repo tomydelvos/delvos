@@ -2,7 +2,7 @@
 # Sourced by the deploy workflow. Normalizes HOST / PORT / SSH_USER taken from secrets, tolerating
 # copy-paste artefacts: surrounding whitespace/newlines, "ssh://", "user@host", "host:port", "host port".
 # Exits with an ::error:: annotation when the result is still not a usable host/port.
-_trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | head -n1; }
+_trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' | head -n1; }
 HOST=$(_trim "${HOST:-}"); PORT=$(_trim "${PORT:-}"); SSH_USER=$(_trim "${SSH_USER:-}")
 HOST="${HOST#ssh://}"; HOST="${HOST%/}"
 case "$HOST" in *[[:space:]]*)

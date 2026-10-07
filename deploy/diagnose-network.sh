@@ -28,7 +28,7 @@ probe() {
   elif printf '%s' "$err" | grep -qi refused; then echo closed
   else echo filtered; fi
 }
-banner() { timeout 6 bash -c "exec 3<>/dev/tcp/$1/$2; head -c 40 <&3" 2>/dev/null | tr -d '\r\n' | grep -Eo '^SSH-[0-9.]+' || true; }
+banner() { timeout 6 bash -c "exec 3<>/dev/tcp/$1/$2; IFS= read -r l <&3; printf '%s' \"\$l\"" 2>/dev/null | tr -d '\r' | grep -Eo '^SSH-[0-9.]+' || true; }
 
 say "── Diagnosis jaringan GitHub Actions → VPS ──"
 if [ -z "$HOST" ]; then say "STAGING_SSH_HOST kosong."; out ssh_reachable=false; exit 0; fi
@@ -90,7 +90,7 @@ if [ -n "$IP" ]; then
     if [ "$ssh_state" = closed ]; then
       problems+=("Port $PORT ditolak (refused): server hidup tetapi SSH tidak berjalan di port itu. Cek di konsol VPS: sudo ss -tlnp | grep ssh — lalu isi STAGING_SSH_PORT sesuai port yang tampil.")
     elif $web_up; then
-      problems+=("Server terjangkau (port web terbuka) tetapi port SSH $PORT diblokir untuk IP luar. Penyebab umum: firewall/security group di dashboard penyedia hanya mengizinkan IP Anda, atau fail2ban. Buka TCP $PORT dari 0.0.0.0/0 — atau gunakan mode runner (lihat deploy/DEPLOY-STAGING.md, tanpa perlu membuka SSH).")
+      problems+=("Server terjangkau (port web terbuka) tetapi port SSH $PORT diblokir untuk IP luar. Penyebab umum: firewall/security group di dashboard penyedia hanya mengizinkan IP Anda, atau fail2ban. Buka TCP $PORT dari 0.0.0.0/0 — atau pakai auto-update di VPS (lihat deploy/DEPLOY-STAGING.md) yang tidak perlu SSH terbuka.")
     else
       problems+=("Tidak ada port yang menjawab (SSH, 80, 443 semuanya timeout). Penyebab umum: IP salah, VPS mati, atau firewall penyedia memblokir semua akses dari luar. Cocokkan IP dengan dashboard dan buka TCP $PORT, 80, 443.")
     fi

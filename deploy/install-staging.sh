@@ -22,12 +22,17 @@ q() { case "$1" in *\'*) echo "Nilai tidak boleh mengandung tanda kutip tunggal 
 ask_secret() { local v; read -r -s -p "$1: " v </dev/tty; echo >&2; echo "$v"; }
 
 [ "$(id -u)" = 0 ] || { echo "Jalankan sebagai root (sudo)."; exit 1; }
+# One deploy at a time (SSH deploy, auto-update timer, manual run). auto-update.sh already holds it.
+if [ -z "${NO_LOCK:-}" ]; then exec 9>/var/lock/kantor-deploy.lock; flock -w 1800 9 || { echo "Deploy lain masih berjalan."; exit 1; }; fi
+# Secrets are printed only to an interactive terminal, never to CI/journal logs.
+SHOW_SECRETS=false; [ -t 1 ] && [ -z "${ENV_SOURCE:-}" ] && SHOW_SECRETS=true
+val() { grep -E "^$1=" staging.env | head -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//' || true; }
 
 say "1/6 Memasang Docker, git, dan firewall"
 if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | sh; fi
 apt-get update -qq && apt-get install -y -qq git curl ufw openssl >/dev/null
 # Keep every port sshd listens on open (plus the one we are connected through), even if it is not 22,
-# before enabling the firewall — the installer may run from a GitHub runner without an SSH session.
+# before enabling the firewall — the installer may run from the auto-update timer without an SSH session.
 SSH_PORTS="${SSH_PORT:-} $(echo "${SSH_CONNECTION:-}" | awk '{print $4}') $(ss -Htlnp 2>/dev/null | awk '/"sshd"/ {n=split($4,a,":"); print a[n]}' || true) $(sshd -T 2>/dev/null | awk '$1=="port" {print $2}' || true)"
 for p in $SSH_PORTS 22; do case "$p" in ''|*[!0-9]*) ;; *) ufw allow "$p/tcp" >/dev/null;; esac; done
 ufw allow OpenSSH >/dev/null && ufw allow 80/tcp >/dev/null && ufw allow 443 >/dev/null && ufw --force enable >/dev/null
@@ -58,6 +63,16 @@ finalize_env() {
   fi
   chmod 600 staging.env
 }
+
+PASTED=""
+if [ ! -f staging.env ] && [ -z "${ENV_SOURCE:-}" ] && [ "$(ask "Sudah punya isi STAGING_ENV (yang juga diisi di GitHub Secrets) untuk ditempel? (y/n)" n)" = y ]; then
+  echo "Tempel isinya, lalu ketik END di baris tersendiri dan tekan Enter:"
+  exec 8</dev/tty; umask 077; : > staging.env
+  while IFS= read -r line <&8; do [ "$line" = END ] && break; printf '%s\n' "$line" >> staging.env; done
+  umask 022; exec 8<&-
+  grep -q '^STAGING_DOMAIN=' staging.env || { rm -f staging.env; echo "STAGING_DOMAIN tidak ditemukan pada isi yang ditempel."; exit 1; }
+  PASTED=1
+fi
 
 if [ ! -f staging.env ]; then
   say "3/6 Konfigurasi (kosongkan bila belum punya — kanal itu akan berjalan simulasi)"
@@ -113,10 +128,11 @@ EOF
   umask 022
 else
   say "3/6 staging.env sudah ada — dipakai apa adanya"
-  ADMIN_PW="(tidak berubah)"; TESTER_PW=""
-  DOMAIN=$(grep '^STAGING_DOMAIN=' staging.env | cut -d= -f2); TESTER=$(grep '^STAGING_BASIC_AUTH_USER=' staging.env | cut -d= -f2)
-  VERIFY=$(grep '^WA_META_VERIFY_TOKEN=' staging.env | cut -d= -f2)
+  ADMIN_PW="(lihat ADMIN_PASSWORD di staging.env, atau sandi yang sudah Anda ganti)"
+  TESTER_PW=""; [ -n "$PASTED" ] && TESTER_PW=$(val STAGING_BASIC_AUTH_PASSWORD)
+  DOMAIN=$(val STAGING_DOMAIN); TESTER=$(val STAGING_BASIC_AUTH_USER); VERIFY=$(val WA_META_VERIFY_TOKEN)
 fi
+$SHOW_SECRETS || { ADMIN_PW="(lihat ADMIN_PASSWORD di staging.env)"; }
 
 finalize_env
 
@@ -130,9 +146,38 @@ for i in $(seq 1 30); do curl -fsS "https://$DOMAIN/healthz" >/dev/null 2>&1 && 
 
 say "6/6 Smoke test"
 if [ -n "$TESTER_PW" ]; then ./smoke-test.sh "https://$DOMAIN" "$TESTER" "$TESTER_PW" "$VERIFY" || true
-else echo "Jalankan: ./smoke-test.sh https://$DOMAIN $TESTER '<sandi-penguji>' $VERIFY"; fi
+else echo "Jalankan: ./smoke-test.sh https://$DOMAIN $TESTER '<sandi-penguji>' <WA_META_VERIFY_TOKEN>"; fi
 
 # An empty crontab makes grep -v exit 1; tolerate it so the backup job is still installed.
+# Pull-based auto-update: redeploy whenever the branch moves (no inbound SSH needed). AUTO_UPDATE=0 to skip.
+if [ -z "${AUTO_UPDATE_RUN:-}" ] && [ "${AUTO_UPDATE:-1}" != 0 ]; then
+  cat > /etc/systemd/system/kantor-auto-update.service <<UNIT
+[Unit]
+Description=Kantor staging: deploy commit baru dari GitHub
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=DIR=$DIR
+ExecStart=/bin/bash $DIR/deploy/auto-update.sh
+TimeoutStartSec=45min
+UNIT
+  cat > /etc/systemd/system/kantor-auto-update.timer <<UNIT
+[Unit]
+Description=Kantor staging: cek commit baru tiap 2 menit
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload && systemctl enable --now kantor-auto-update.timer >/dev/null 2>&1 || echo "Peringatan: timer auto-update gagal dipasang."
+fi
+mkdir -p /var/lib/kantor && git -C "$DIR" rev-parse HEAD > /var/lib/kantor/deployed
+
 ( { crontab -l 2>/dev/null | grep -v 'scripts/backup.js'; } || true; echo "30 1 * * * cd $DIR/deploy && docker compose -f docker-compose.staging.yml --env-file staging.env exec -T app node scripts/backup.js >/dev/null 2>&1" ) | crontab -
 
 cat <<EOF
@@ -143,7 +188,8 @@ cat <<EOF
  Login situs     :  $TESTER / (sandi penguji Anda)
  Login admin     :  admin / $ADMIN_PW   ← segera ganti di "Akun Saya"
  Webhook WhatsApp:  https://$DOMAIN/webhooks/whatsapp
- Verify token    :  $VERIFY
+ Verify token    :  $($SHOW_SECRETS && echo "$VERIFY" || echo "(lihat WA_META_VERIFY_TOKEN di staging.env)")
+ Auto-update     :  tiap 2 menit dari branch $BRANCH (journalctl -u kantor-auto-update)
  Cadangan harian :  01.30 (cron)
  Konfigurasi     :  $DIR/deploy/staging.env
 ────────────────────────────────────────────────────────
