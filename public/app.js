@@ -284,7 +284,8 @@
     steps.push({ title: 'Tinjau & Kirim', node: review, fields: [], review: true });
 
     const stepper = $('#stepper');
-    steps.forEach((s, i) => stepper.append(el('li', { text: `${i + 1}. ${s.title}` })));
+    // Completed steps stay clickable (going back never skips validation).
+    steps.forEach((s, i) => stepper.append(el('li', {}, el('button', { type: 'button', title: s.title, onclick: () => { if (i < currentStep) goStep(i); } }, el('span', { text: s.title })))));
 
     restoreDraft();
     if (CFG.prefill) {
@@ -316,8 +317,16 @@
     steps.forEach((s, idx) => { s.node.hidden = idx !== currentStep; });
     [...$('#stepper').children].forEach((li, idx) => {
       li.className = idx === currentStep ? 'active' : idx < currentStep ? 'done' : '';
+      const b = li.firstChild;
+      if (idx === currentStep) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     });
-    $('#progress-bar').style.width = `${(currentStep / (steps.length - 1)) * 100}%`;
+    // Segmented pill: one segment per step slides along the track; finished steps tint behind it.
+    const seg = 100 / steps.length;
+    $('#seg-pill').style.width = `${seg}%`;
+    $('#seg-pill').style.transform = `translateX(${currentStep * 100}%)`;
+    $('#seg-done').style.width = `${currentStep * seg}%`;
+    $('#step-title').textContent = steps[currentStep].title;
+    $('#step-count').textContent = `Langkah ${currentStep + 1} dari ${steps.length}`;
     $('#btn-prev').style.visibility = currentStep === 0 ? 'hidden' : 'visible';
     const last = currentStep === steps.length - 1;
     $('#btn-next').hidden = last;

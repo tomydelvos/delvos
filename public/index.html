@@ -28,7 +28,7 @@
     <!-- Landing + chatbot -->
     <section id="view-chat" class="view grid-2" hidden>
       <div class="hero">
-        <p class="eyebrow">Penerimaan Klien</p>
+        <p class="eyebrow">⚖ Penerimaan Klien</p>
         <h1>Konsultasikan kebutuhan hukum Anda dengan tenang.</h1>
         <p class="lead">Asisten virtual kami akan memandu Anda menyampaikan kebutuhan hukum secara terstruktur, sehingga tim advokat dapat menindaklanjutinya dengan tepat.</p>
         <ol class="steps">
@@ -62,8 +62,11 @@
           <h1 id="form-title">Formulir Registrasi</h1>
           <p id="form-intro" class="muted"></p>
           <div id="ref-banner" class="notice" hidden></div>
-          <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
-          <ol class="stepper" id="stepper"></ol>
+          <div class="seg">
+            <div class="seg-head"><strong id="step-title"></strong><span class="muted small" id="step-count"></span></div>
+            <div class="seg-track" aria-hidden="true"><div class="seg-done" id="seg-done"></div><div class="seg-pill" id="seg-pill"></div></div>
+            <ol class="stepper" id="stepper" aria-label="Tahapan formulir"></ol>
+          </div>
         </div>
         <form id="reg-form" novalidate>
           <div id="form-steps"></div>

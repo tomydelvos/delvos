@@ -64,7 +64,7 @@ function safeUrl(url) {
 function renderEmail(template, vars, office) {
   const body = applySections(template.body || '', vars);
   const paragraphs = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  const brand = office.brandColor || '#1f3a5f';
+  const brand = office.brandColor || '#3b608f';
   const accent = office.accentColor || '#b8912f';
 
   const htmlParts = [];
